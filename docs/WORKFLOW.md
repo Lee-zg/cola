@@ -36,6 +36,10 @@ Scopes should be short package or subsystem names, such as `storage`, `importer`
 Required local checks:
 
 ```powershell
+cd frontend
+npm ci
+npm run build
+cd ..
 go test . ./internal/...
 cd frontend
 npm run lint

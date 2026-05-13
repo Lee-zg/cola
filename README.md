@@ -19,7 +19,7 @@ Cola Bookmarks is a local-first desktop bookmark manager built with Go, Wails v2
 
 ## Project Status
 
-Current version: `0.1.0`
+Current version: `0.1.1`
 
 The application is an early MVP. The storage, import/export, local Web catalog, and governance workflows are in place, while richer AI model downloads and a third-party theme ecosystem are future work.
 
@@ -36,9 +36,12 @@ Commands:
 
 ```powershell
 go mod download
-go test . ./internal/...
 cd frontend
 npm ci
+npm run build
+cd ..
+go test . ./internal/...
+cd frontend
 npm run lint
 npm run format:check
 npm run typecheck

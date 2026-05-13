@@ -17,9 +17,12 @@ Update:
 Run:
 
 ```powershell
-go test . ./internal/...
 cd frontend
 npm ci
+npm run build
+cd ..
+go test . ./internal/...
+cd frontend
 npm run lint
 npm run format:check
 npm run typecheck

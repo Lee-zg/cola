@@ -16,9 +16,12 @@ Install and verify:
 
 ```powershell
 go mod download
-go test . ./internal/...
 cd frontend
 npm ci
+npm run build
+cd ..
+go test . ./internal/...
+cd frontend
 npm run lint
 npm run typecheck
 npm run test
@@ -82,6 +85,10 @@ Every pull request should include:
 Before requesting review, run:
 
 ```powershell
+cd frontend
+npm ci
+npm run build
+cd ..
 go test . ./internal/...
 cd frontend
 npm run lint

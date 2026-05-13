@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) and uses Conventional Commits for commit messages.
 
+## [0.1.1] - 2026-05-13
+
+### Changed
+
+- Hardened CI, release, and security workflows so Go tooling runs after frontend assets are built.
+- Added open-source governance files and frontend lint, format, typecheck, and coverage tooling.
+
 ## [0.1.0] - 2026-05-13
 
 ### Added

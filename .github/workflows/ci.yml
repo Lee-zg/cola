@@ -25,6 +25,21 @@ jobs:
       - name: Download Go modules
         run: go mod download
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend assets
+        working-directory: frontend
+        run: npm run build
+
       - name: Check formatting
         shell: pwsh
         run: |
@@ -56,7 +71,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.13.0
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -101,7 +116,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.13.0
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
