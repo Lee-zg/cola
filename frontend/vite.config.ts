@@ -7,6 +7,9 @@ export default defineConfig({
     strictPort: false
   },
   test: {
-    environment: 'jsdom'
+    environment: 'jsdom',
+    coverage: {
+      exclude: ['dist/**', 'node_modules/**', 'wailsjs/**', 'coverage/**', '*.config.*', 'vite.config.ts']
+    }
   }
 })

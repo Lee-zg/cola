@@ -100,7 +100,9 @@ function joinList(values: string[]): string {
         </a>
         <div class="row">
           <select v-model="templateId">
-            <option v-for="template in store.templates" :key="template.id" :value="template.id">{{ template.name }}</option>
+            <option v-for="template in store.templates" :key="template.id" :value="template.id">
+              {{ template.name }}
+            </option>
           </select>
           <button @click="store.exportTo(exportPath, templateId)">导出</button>
         </div>
@@ -153,7 +155,9 @@ function joinList(values: string[]): string {
             <h2>{{ store.selected ? '编辑书签' : '新增书签' }}</h2>
             <div class="actions">
               <button type="button" :disabled="!store.selected" @click="store.analyzeSelected()">AI 分析</button>
-              <button type="button" class="danger" :disabled="!store.selected" @click="store.removeSelected()">删除</button>
+              <button type="button" class="danger" :disabled="!store.selected" @click="store.removeSelected()">
+                删除
+              </button>
               <button type="submit">保存</button>
             </div>
           </div>
@@ -177,17 +181,26 @@ function joinList(values: string[]): string {
             </label>
             <label class="field">
               <span>标签</span>
-              <input :value="joinList(store.draft.tags)" @input="store.draft.tags = splitList(($event.target as HTMLInputElement).value)" />
+              <input
+                :value="joinList(store.draft.tags)"
+                @input="store.draft.tags = splitList(($event.target as HTMLInputElement).value)"
+              />
             </label>
           </div>
           <div class="two-col">
             <label class="field">
               <span>关键词</span>
-              <input :value="joinList(store.draft.keywords)" @input="store.draft.keywords = splitList(($event.target as HTMLInputElement).value)" />
+              <input
+                :value="joinList(store.draft.keywords)"
+                @input="store.draft.keywords = splitList(($event.target as HTMLInputElement).value)"
+              />
             </label>
             <label class="field">
               <span>别名</span>
-              <input :value="joinList(store.draft.aliases)" @input="store.draft.aliases = splitList(($event.target as HTMLInputElement).value)" />
+              <input
+                :value="joinList(store.draft.aliases)"
+                @input="store.draft.aliases = splitList(($event.target as HTMLInputElement).value)"
+              />
             </label>
           </div>
           <p class="status">{{ store.status }}</p>

@@ -1,4 +1,12 @@
-import type { Bookmark, BookmarkInput, ImportResult, SearchRequest, SearchResult, ServerStatus, ThemeManifest } from './types'
+import type {
+  Bookmark,
+  BookmarkInput,
+  ImportResult,
+  SearchRequest,
+  SearchResult,
+  ServerStatus,
+  ThemeManifest
+} from './types'
 
 type Backend = {
   CreateBookmark(input: BookmarkInput): Promise<Bookmark>

@@ -1,15 +1,10 @@
+.git/
 build/
 frontend/dist/
 frontend/node_modules/
 frontend/wailsjs/
 frontend/coverage/
-frontend/package.json.md5
-.env
-.env.*
+go.sum
 *.db
 *.db-shm
 *.db-wal
-*.backup
-.coverage
-.DS_Store
-Thumbs.db

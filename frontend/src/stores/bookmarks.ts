@@ -33,7 +33,14 @@ export const useBookmarkStore = defineStore('bookmarks', {
       this.loading = true
       try {
         const [result, folders, tags, server, templates] = await Promise.all([
-          api.listBookmarks({ query: this.query, folder: this.folder, tags: this.tag ? [this.tag] : [], limit: 200, offset: 0, sort: 'updated' }),
+          api.listBookmarks({
+            query: this.query,
+            folder: this.folder,
+            tags: this.tag ? [this.tag] : [],
+            limit: 200,
+            offset: 0,
+            sort: 'updated'
+          }),
           api.listFolders(),
           api.listTags(),
           api.getLocalServerStatus(),
