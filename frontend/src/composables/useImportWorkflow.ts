@@ -1,4 +1,4 @@
-// 文件说明：frontend/src/composables/useImportWorkflow.ts，对应当前模块的数据结构、状态逻辑或工具函数。
+// useImportWorkflow 管理导入页临时状态，导入解析和去重由后端 importer/storage 完成。
 import { ref } from 'vue'
 import { importSourceOptions, type ImportHistoryRecord } from '../helpers/workflow'
 import { useBookmarkStore } from '../stores/bookmarks'
@@ -14,6 +14,7 @@ export const useImportWorkflow = () => {
   const keepFolders = ref(true)
 
   const startImport = async () => {
+    // 历史记录只用于当前前端会话展示，不写入数据库或配置。
     importing.value = true
     try {
       await store.importFrom(importSource.value, importPath.value)

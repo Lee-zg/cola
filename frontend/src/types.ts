@@ -1,4 +1,4 @@
-// 文件说明：frontend/src/types.ts，对应当前模块的数据结构、状态逻辑或工具函数。
+// types.ts 镜像 Go 后端暴露给 Wails 的 JSON 契约，字段名需要和 bookmark 包保持一致。
 export interface Bookmark {
   id: string
   title: string

@@ -1,4 +1,4 @@
-// 文件说明：frontend/src/api.ts，对应当前模块的数据结构、状态逻辑或工具函数。
+// api 模块是前端访问 Wails 后端的唯一边界，页面和 store 不直接读取 window.go。
 import type {
   Bookmark,
   BookmarkInput,
@@ -34,6 +34,7 @@ declare global {
   }
 }
 
+// backend 在运行时校验 Wails 注入对象，便于开发环境未通过 wails 启动时给出明确错误。
 function backend(): Backend {
   const api = window.go?.main?.App
   if (!api) {
@@ -42,6 +43,7 @@ function backend(): Backend {
   return api
 }
 
+// api 将 Go 方法名收敛成前端语义化方法，避免组件层依赖 Wails 生成的命名约定。
 export const api = {
   createBookmark: (input: BookmarkInput) => backend().CreateBookmark(input),
   updateBookmark: (id: string, input: BookmarkInput) => backend().UpdateBookmark(id, input),

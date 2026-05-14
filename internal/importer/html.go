@@ -1,4 +1,4 @@
-// 文件说明：internal/importer/html.go，负责应用后端或核心业务实现。
+// importer 的 HTML 解析器面向浏览器导出的 Netscape bookmark 文件，只提取标题、URL 和当前文件夹。
 package importer
 
 import (
@@ -17,6 +17,7 @@ var (
 	tagRe    = regexp.MustCompile(`(?s)<[^>]+>`)
 )
 
+// ParseNetscapeHTML 按行解析常见导出格式；它不是通用 HTML 清洗器，后续字段校验交给 bookmark.NormalizeInput。
 func ParseNetscapeHTML(data []byte) []bookmark.BookmarkInput {
 	lines := strings.Split(string(data), "\n")
 	currentFolder := "Unsorted"

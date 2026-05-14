@@ -1,4 +1,4 @@
-// 文件说明：frontend/src/composables/useTaxonomy.ts，对应当前模块的数据结构、状态逻辑或工具函数。
+// useTaxonomy 复用全局筛选状态，让分类页点击后能影响书签库列表。
 import { computed } from 'vue'
 import { useBookmarkStore } from '../stores/bookmarks'
 

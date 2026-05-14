@@ -1,4 +1,4 @@
-// 文件说明：internal/ai/rules.go，负责应用后端或核心业务实现。
+// ai 包当前只提供离线规则分析器，后续可在 Analyzer 接口下替换为本地模型实现。
 package ai
 
 import (
@@ -13,6 +13,7 @@ type Analyzer interface {
 	Analyze(ctx context.Context, item bookmark.Bookmark) (bookmark.AnalysisResult, error)
 }
 
+// RuleAnalyzer 不访问网络，也不读取外部模型；结果只作为可合并的标签、关键词和别名建议。
 type RuleAnalyzer struct{}
 
 func (RuleAnalyzer) Analyze(_ context.Context, item bookmark.Bookmark) (bookmark.AnalysisResult, error) {
@@ -29,6 +30,7 @@ func (RuleAnalyzer) Analyze(_ context.Context, item bookmark.Bookmark) (bookmark
 		"Productivity": {"notion", "trello", "calendar", "todo", "task", "workspace"},
 		"Learning":     {"course", "tutorial", "learn", "docs", "documentation", "book"},
 	}
+	// 分类规则保持显式枚举，方便维护者审查自动打标来源，避免隐藏的模型行为。
 	for tag, needles := range categories {
 		for _, needle := range needles {
 			if strings.Contains(text, needle) {

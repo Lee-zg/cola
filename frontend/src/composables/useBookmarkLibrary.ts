@@ -1,10 +1,11 @@
-// 文件说明：frontend/src/composables/useBookmarkLibrary.ts，对应当前模块的数据结构、状态逻辑或工具函数。
+// useBookmarkLibrary 封装书签库页面的筛选、视图模式和编辑抽屉状态。
 import { computed, ref } from 'vue'
 import { useBookmarkStore } from '../stores/bookmarks'
 import type { Bookmark, BookmarkInput } from '../types'
 
 export type BookmarkViewMode = 'list' | 'cards' | 'compact'
 
+// 该 composable 只编排页面交互，真实持久化和刷新仍交给 Pinia store。
 export const useBookmarkLibrary = () => {
   const store = useBookmarkStore()
   const editorOpen = ref(false)

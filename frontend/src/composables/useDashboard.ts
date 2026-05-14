@@ -1,4 +1,4 @@
-// 文件说明：frontend/src/composables/useDashboard.ts，对应当前模块的数据结构、状态逻辑或工具函数。
+// useDashboard 从全局书签状态派生首页统计，不直接请求后端。
 import { computed } from 'vue'
 import { getDashboardStats, getRecentItems, getTopTags, getWebServerSummary } from '../helpers/dashboard'
 import { useBookmarkStore } from '../stores/bookmarks'

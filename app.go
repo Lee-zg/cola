@@ -1,4 +1,4 @@
-// 文件说明：app.go，负责应用后端或核心业务实现。
+// App 是 Wails 暴露给前端的唯一后端门面，负责把 UI 请求路由到存储、导入导出、分析、备份和本地 Web 服务。
 package main
 
 import (
@@ -31,10 +31,12 @@ type App struct {
 	themesDir string
 }
 
+// NewApp 只装配轻量依赖，真正的数据目录、SQLite 连接和 Web 服务会在首次调用时懒初始化。
 func NewApp() *App {
 	return &App{analyzer: ai.RuleAnalyzer{}}
 }
 
+// NewAppForTest 固定测试数据目录，避免测试读写用户真实配置目录。
 func NewAppForTest(dataDir string) *App {
 	app := NewApp()
 	app.dataDir = dataDir
@@ -43,6 +45,7 @@ func NewAppForTest(dataDir string) *App {
 	return app
 }
 
+// startup 记录 Wails 上下文，并提前触发一次初始化，让启动阶段的问题尽早暴露。
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	if err := a.ensureReady(ctx); err != nil {
@@ -50,6 +53,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 }
 
+// shutdown 释放可能持有文件句柄的服务，尤其是本地 HTTP 服务和 SQLite 连接。
 func (a *App) shutdown(ctx context.Context) {
 	if a.server != nil {
 		_ = a.server.Stop(ctx)
@@ -119,6 +123,7 @@ func (a *App) ImportBookmarks(req bookmark.ImportRequest) (bookmark.ImportResult
 	return a.store.UpsertBookmarks(a.context(), items)
 }
 
+// ExportBookmarks 始终从当前数据库快照导出完整目录；筛选导出目前只存在于前端状态，不改变后端导出范围。
 func (a *App) ExportBookmarks(req bookmark.ExportRequest) (string, error) {
 	if err := a.ensureReady(a.context()); err != nil {
 		return "", err
@@ -141,6 +146,7 @@ func (a *App) ExportBookmarks(req bookmark.ExportRequest) (string, error) {
 	return req.Path, nil
 }
 
+// AnalyzeBookmark 将分析结果合并回已有标签、关键词和别名，避免覆盖用户手工维护的数据。
 func (a *App) AnalyzeBookmark(id string) (bookmark.Bookmark, error) {
 	if err := a.ensureReady(a.context()); err != nil {
 		return bookmark.Bookmark{}, err
@@ -156,6 +162,7 @@ func (a *App) AnalyzeBookmark(id string) (bookmark.Bookmark, error) {
 	return a.store.ApplyAnalysis(a.context(), id, result)
 }
 
+// AnalyzeAllBookmarks 串行处理全部书签，当前规则分析器很轻量；未来接入重模型时这里是队列化的边界。
 func (a *App) AnalyzeAllBookmarks() (int, error) {
 	if err := a.ensureReady(a.context()); err != nil {
 		return 0, err
@@ -195,6 +202,7 @@ func (a *App) RestoreBackup(path string) (bookmark.BackupResult, error) {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	// 恢复会替换 SQLite 文件，必须先关闭所有持有数据库句柄的组件，再重新打开并重建本地服务。
 	if a.server != nil {
 		_ = a.server.Stop(a.context())
 	}
@@ -203,6 +211,7 @@ func (a *App) RestoreBackup(path string) (bookmark.BackupResult, error) {
 	}
 	snapshot, err := backup.Restore(a.dbPath, path)
 	if err != nil {
+		// 恢复失败时尽量回到可用状态，让前端仍能继续读取原数据库或展示明确错误。
 		reopened, openErr := storage.Open(a.context(), a.dbPath)
 		if openErr == nil {
 			a.store = reopened
@@ -255,6 +264,7 @@ func (a *App) InstallThemePackage(path string) (bookmark.ThemeManifest, error) {
 	return theme.InstallPackage(path, a.themesDir)
 }
 
+// ensureReady 集中维护本地优先的数据目录约定，避免各业务方法重复处理路径和连接生命周期。
 func (a *App) ensureReady(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()

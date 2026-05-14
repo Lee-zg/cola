@@ -1,4 +1,4 @@
-// 文件说明：frontend/src/helpers/backup.ts，对应当前模块的数据结构、状态逻辑或工具函数。
+// backup helper 集中维护恢复确认口令和备份历史展示格式。
 export const RESTORE_CONFIRMATION = 'RESTORE'
 
 export const canRestoreBackup = (confirmation: string): boolean => confirmation === RESTORE_CONFIRMATION

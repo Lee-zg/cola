@@ -1,4 +1,4 @@
-// 文件说明：internal/importer/browser.go，负责应用后端或核心业务实现。
+// browser importer 负责从本机浏览器默认数据文件读取书签，不上传或访问网络。
 package importer
 
 import (
@@ -19,6 +19,7 @@ import (
 
 type BrowserImporter struct{}
 
+// Import 支持显式路径优先；未传路径时只在当前系统约定目录中探测浏览器数据文件。
 func (BrowserImporter) Import(ctx context.Context, sourceType, explicitPath string) ([]bookmark.BookmarkInput, error) {
 	sourceType = strings.ToLower(strings.TrimSpace(sourceType))
 	switch sourceType {
@@ -92,6 +93,7 @@ func parseChromiumBookmarks(path string) ([]bookmark.BookmarkInput, error) {
 	return items, nil
 }
 
+// walkChromium 将 Chromium 的树状目录压平成书签列表，保留叶子节点所在的最近文件夹名。
 func walkChromium(node chromiumNode, folder string, items *[]bookmark.BookmarkInput) {
 	switch node.Type {
 	case "url":
@@ -115,6 +117,7 @@ func walkChromium(node chromiumNode, folder string, items *[]bookmark.BookmarkIn
 	}
 }
 
+// parseFirefoxPlaces 以只读 immutable 模式打开 Firefox places.sqlite，避免干扰浏览器正在使用的数据库。
 func parseFirefoxPlaces(ctx context.Context, path string) ([]bookmark.BookmarkInput, error) {
 	dsn := "file:" + filepath.ToSlash(path) + "?mode=ro&immutable=1"
 	db, err := sql.Open("sqlite", dsn)

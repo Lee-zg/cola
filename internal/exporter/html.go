@@ -1,4 +1,4 @@
-// 文件说明：internal/exporter/html.go，负责应用后端或核心业务实现。
+// exporter 包把本地书签快照渲染成可离线打开的静态 HTML 目录。
 package exporter
 
 import (
@@ -19,6 +19,7 @@ type CatalogData struct {
 	Generated string              `json:"generated"`
 }
 
+// BuildCatalog 从书签列表派生筛选元数据，导出文件不再依赖数据库或后端服务。
 func BuildCatalog(title string, items []bookmark.Bookmark) CatalogData {
 	folderSeen := map[string]struct{}{}
 	tagSeen := map[string]struct{}{}
@@ -38,6 +39,7 @@ func BuildCatalog(title string, items []bookmark.Bookmark) CatalogData {
 	}
 }
 
+// RenderCatalogHTML 只使用内置模板渲染，并把书签数据作为 JSON payload 注入离线页面。
 func RenderCatalogHTML(data CatalogData, templateID string) (string, error) {
 	if data.Title == "" {
 		data.Title = "Bookmark Catalog"
@@ -46,6 +48,7 @@ func RenderCatalogHTML(data CatalogData, templateID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// payload 来自 json.Marshal，作为 template.JS 注入前已完成 JSON 转义。
 	tpl := classicTemplate
 	if templateID == "compact" {
 		tpl = compactTemplate

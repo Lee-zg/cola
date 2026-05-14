@@ -1,4 +1,4 @@
-// 文件说明：frontend/src/helpers/workflow.ts，对应当前模块的数据结构、状态逻辑或工具函数。
+// workflow helper 保存跨页面复用的展示型选项和历史记录结构，不负责持久化。
 export interface ImportSourceOption {
   id: string
   name: string
@@ -17,6 +17,7 @@ export interface BackupHistoryEntry {
   time: string
 }
 
+// id 必须匹配后端 BrowserImporter 支持的 sourceType。
 export const importSourceOptions: ImportSourceOption[] = [
   { id: 'html', name: 'HTML 文件', description: '从浏览器导出的 bookmarks.html 导入' },
   { id: 'chrome', name: 'Chrome', description: '自动扫描 Chrome 默认书签数据' },

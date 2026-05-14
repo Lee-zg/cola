@@ -1,4 +1,4 @@
-// 文件说明：internal/theme/theme.go，负责应用后端或核心业务实现。
+// theme 包定义导出模板包的最低校验规则，确保第三方资源只能作为静态数据被安装。
 package theme
 
 import (
@@ -13,6 +13,7 @@ import (
 
 const TemplateAPIVersion = "1"
 
+// BuiltinTemplates 暴露当前内置模板清单，前端只用它来展示可选导出样式。
 func BuiltinTemplates() []bookmark.ThemeManifest {
 	return []bookmark.ThemeManifest{
 		{
@@ -36,6 +37,7 @@ func BuiltinTemplates() []bookmark.ThemeManifest {
 	}
 }
 
+// ValidatePackage 校验 manifest、API 版本和资源路径，禁止绝对路径、目录逃逸和脚本类资源。
 func ValidatePackage(packagePath string) (bookmark.ThemeManifest, error) {
 	info, err := os.Stat(packagePath)
 	if err != nil {
@@ -70,6 +72,7 @@ func ValidatePackage(packagePath string) (bookmark.ThemeManifest, error) {
 	return manifest, nil
 }
 
+// InstallPackage 先复用完整校验，再复制到应用主题目录；复制过程中仍逐个校验资源路径。
 func InstallPackage(packagePath, themesDir string) (bookmark.ThemeManifest, error) {
 	manifest, err := ValidatePackage(packagePath)
 	if err != nil {

@@ -1,4 +1,4 @@
-// 文件说明：frontend/src/stores/bookmarks.ts，对应当前模块的数据结构、状态逻辑或工具函数。
+// bookmarks store 是前端业务状态聚合层，负责协调书签、元数据、导入导出、备份和本地服务状态。
 import { defineStore } from 'pinia'
 import { api } from '../api'
 import { blankBookmarkInput, toBookmarkInput } from '../helpers/bookmarkLists'
@@ -21,6 +21,7 @@ export const useBookmarkStore = defineStore('bookmarks', {
     server: { running: false, url: '', addr: '' } as ServerStatus
   }),
   actions: {
+    // refresh 同步列表、筛选元数据、Web 服务状态和导出模板，作为页面进入和操作后的统一刷新入口。
     async refresh() {
       this.loading = true
       try {
@@ -71,6 +72,7 @@ export const useBookmarkStore = defineStore('bookmarks', {
       }
     },
     select(item: Bookmark | null) {
+      // 编辑抽屉始终使用 draft 副本，避免用户输入直接污染当前选中书签。
       this.selected = item
       this.draft = item ? toBookmarkInput(item) : blankBookmarkInput()
     },
@@ -101,6 +103,7 @@ export const useBookmarkStore = defineStore('bookmarks', {
       await this.refresh()
     },
     async importFrom(sourceType: string, path: string) {
+      // 导入去重规则在后端存储层执行，前端只负责提交来源和展示汇总结果。
       const result = await api.importBookmarks(sourceType, path)
       this.status = `导入 ${result.imported} 个，跳过 ${result.skipped} 个`
       await this.refresh()
@@ -120,6 +123,7 @@ export const useBookmarkStore = defineStore('bookmarks', {
       await this.refresh()
     },
     async toggleServer() {
+      // 服务开关后立即 refresh，确保状态栏、仪表盘和 Web 服务页面看到同一份运行状态。
       if (this.server.running) {
         await api.stopLocalServer()
       } else {

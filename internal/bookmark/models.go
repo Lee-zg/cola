@@ -1,4 +1,4 @@
-// 文件说明：internal/bookmark/models.go，负责应用后端或核心业务实现。
+// bookmark 包定义前后端共享的业务数据契约，并集中处理输入归一化规则。
 package bookmark
 
 import (
@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	// DefaultLimit 和 MaxLimit 保护列表查询，避免桌面端一次性渲染或导出过大的分页结果。
 	DefaultLimit = 100
 	MaxLimit     = 500
 )
@@ -36,6 +37,7 @@ type Bookmark struct {
 	LastAnalyzedAt *time.Time `json:"lastAnalyzedAt,omitempty"`
 }
 
+// BookmarkInput 是用户可编辑字段；ID、Domain 和时间戳由后端生成，避免前端伪造存储状态。
 type BookmarkInput struct {
 	Title       string   `json:"title"`
 	URL         string   `json:"url"`
@@ -108,6 +110,7 @@ type ThemeManifest struct {
 	Description        string   `json:"description"`
 }
 
+// NormalizeInput 是创建、编辑和导入的统一入口，保证默认标题、默认分类和列表字段规则一致。
 func NormalizeInput(input BookmarkInput) (BookmarkInput, string, error) {
 	input.Title = strings.TrimSpace(input.Title)
 	input.URL = strings.TrimSpace(input.URL)
@@ -131,6 +134,7 @@ func NormalizeInput(input BookmarkInput) (BookmarkInput, string, error) {
 	return input, domain, nil
 }
 
+// NormalizeURL 接受用户省略 scheme 的输入，但只允许桌面书签目录需要展示的常见协议。
 func NormalizeURL(raw string) (string, string, error) {
 	if strings.TrimSpace(raw) == "" {
 		return "", "", errors.New("url is required")
@@ -153,6 +157,7 @@ func NormalizeURL(raw string) (string, string, error) {
 	if host == "" {
 		return "", "", errors.New("url host is required")
 	}
+	// 域名去掉 www. 便于搜索和统计；IP 地址保持原样，避免误改实际访问目标。
 	if ip := net.ParseIP(host); ip == nil {
 		host = strings.TrimPrefix(host, "www.")
 	}
@@ -162,6 +167,7 @@ func NormalizeURL(raw string) (string, string, error) {
 	return parsed.String(), host, nil
 }
 
+// NormalizeList 对标签、关键词和别名统一去空、大小写不敏感去重并排序，保证持久化结果稳定。
 func NormalizeList(values []string) []string {
 	seen := map[string]struct{}{}
 	out := make([]string, 0, len(values))
@@ -183,6 +189,7 @@ func NormalizeList(values []string) []string {
 	return out
 }
 
+// MergeLists 用于 AI 分析结果回写，新增建议只补充到现有人工数据中。
 func MergeLists(base []string, additions ...[]string) []string {
 	merged := append([]string{}, base...)
 	for _, list := range additions {
@@ -191,6 +198,7 @@ func MergeLists(base []string, additions ...[]string) []string {
 	return NormalizeList(merged)
 }
 
+// NormalizeSearch 对外部查询做分页兜底和排序白名单处理，防止前端传入无界或未知查询。
 func NormalizeSearch(req SearchRequest) SearchRequest {
 	req.Query = strings.TrimSpace(req.Query)
 	req.Folder = strings.TrimSpace(req.Folder)

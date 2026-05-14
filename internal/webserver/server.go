@@ -1,4 +1,4 @@
-// 文件说明：internal/webserver/server.go，负责应用后端或核心业务实现。
+// webserver 包提供只读本地书签目录，服务只绑定 127.0.0.1 并通过 store 接口读取数据。
 package webserver
 
 import (
@@ -23,6 +23,7 @@ type CatalogStore interface {
 	ListTags(ctx context.Context) ([]string, error)
 }
 
+// Server 管理临时端口上的本地 HTTP 服务；不持久化任何状态，重启后端即可重建。
 type Server struct {
 	store    CatalogStore
 	mu       sync.Mutex
@@ -41,6 +42,7 @@ func (s *Server) Start(ctx context.Context) (bookmark.ServerStatus, error) {
 	if s.server != nil {
 		return s.statusLocked(), nil
 	}
+	// 绑定 127.0.0.1 和随机端口，减少和其他服务冲突，也避免默认暴露到局域网。
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return bookmark.ServerStatus{}, err
@@ -114,6 +116,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(html))
 }
 
+// handleBookmarks 暴露只读查询接口，分页、排序和搜索规则仍由 bookmark/storage 层统一规范化。
 func (s *Server) handleBookmarks(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -181,6 +184,7 @@ func splitQueryList(raw string) []string {
 
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 本地页面允许内联脚本是为了复用离线导出模板；仍限制连接来源为自身。
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Content-Security-Policy", "default-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'")

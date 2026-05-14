@@ -1,4 +1,4 @@
-// 文件说明：frontend/src/helpers/dashboard.ts，对应当前模块的数据结构、状态逻辑或工具函数。
+// dashboard helper 只做展示层派生统计，真实总数和元数据来自 store 的后端刷新结果。
 import type { Bookmark, ServerStatus } from '../types'
 
 export interface DashboardStats {
@@ -8,6 +8,7 @@ export interface DashboardStats {
   pendingAiCount: number
 }
 
+// lastAnalyzedAt 为空表示当前规则分析器还没有处理过该书签。
 export const getPendingAiItems = (items: Bookmark[]): Bookmark[] => items.filter((item) => !item.lastAnalyzedAt)
 
 export const getDashboardStats = (input: {

@@ -1,4 +1,4 @@
-// 文件说明：internal/storage/store.go，负责应用后端或核心业务实现。
+// storage 包负责本地 SQLite 持久化，是书签、分类、分析状态和设置的唯一写入点。
 package storage
 
 import (
@@ -30,6 +30,7 @@ func Open(ctx context.Context, dbPath string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	// modernc SQLite 在桌面单用户场景下使用单连接更可控，也能避免恢复/关闭时出现多连接文件锁。
 	db.SetMaxOpenConns(1)
 	store := &Store{db: db, dbPath: dbPath}
 	if err := store.init(ctx); err != nil {
@@ -51,6 +52,7 @@ func (s *Store) Close() error {
 }
 
 func (s *Store) init(ctx context.Context) error {
+	// 当前版本直接在启动时幂等建表；后续需要破坏性迁移时应改为版本化 migration。
 	statements := []string{
 		`PRAGMA journal_mode=WAL;`,
 		`PRAGMA foreign_keys=ON;`,
@@ -99,6 +101,7 @@ func (s *Store) init(ctx context.Context) error {
 	return err
 }
 
+// CreateBookmark 只创建单条用户输入的书签，URL 唯一冲突转成稳定的业务错误给前端展示。
 func (s *Store) CreateBookmark(ctx context.Context, input bookmark.BookmarkInput) (bookmark.Bookmark, error) {
 	normalized, domain, err := bookmark.NormalizeInput(input)
 	if err != nil {
@@ -135,6 +138,7 @@ func (s *Store) CreateBookmark(ctx context.Context, input bookmark.BookmarkInput
 	return item, nil
 }
 
+// UpsertBookmarks 用一个事务导入批量书签；单条规范化失败只计为跳过，不中断整批导入。
 func (s *Store) UpsertBookmarks(ctx context.Context, inputs []bookmark.BookmarkInput) (bookmark.ImportResult, error) {
 	result := bookmark.ImportResult{}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -262,6 +266,7 @@ func (s *Store) ListBookmarks(ctx context.Context, req bookmark.SearchRequest) (
 	return bookmark.SearchResult{Items: items, Total: total, Limit: req.Limit, Offset: req.Offset}, nil
 }
 
+// AllBookmarks 复用分页查询分批读取，避免绕过搜索规范化和排序规则。
 func (s *Store) AllBookmarks(ctx context.Context) ([]bookmark.Bookmark, error) {
 	result, err := s.ListBookmarks(ctx, bookmark.SearchRequest{Limit: bookmark.MaxLimit, Sort: "title"})
 	if err != nil {
@@ -313,6 +318,7 @@ func (s *Store) ListTags(ctx context.Context) ([]string, error) {
 	return bookmark.NormalizeList(tags), nil
 }
 
+// ApplyAnalysis 合并分析建议而不是覆盖字段，保护用户手工维护的标签、关键词和别名。
 func (s *Store) ApplyAnalysis(ctx context.Context, id string, result bookmark.AnalysisResult) (bookmark.Bookmark, error) {
 	item, err := s.GetBookmark(ctx, id)
 	if err != nil {
@@ -373,6 +379,7 @@ func scanBookmark(scanner bookmarkScanner) (bookmark.Bookmark, error) {
 	return item, nil
 }
 
+// buildWhere 仅返回参数化 SQL 片段；排序字段由调用方白名单选择，避免拼接用户输入。
 func buildWhere(req bookmark.SearchRequest) (string, []any) {
 	clauses := []string{"1=1"}
 	args := []any{}

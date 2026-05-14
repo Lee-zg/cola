@@ -1,4 +1,4 @@
-// 文件说明：internal/backup/backup.go，负责应用后端或核心业务实现。
+// backup 包只做本地 SQLite 文件复制和恢复，不解析或上传书签内容。
 package backup
 
 import (
@@ -22,6 +22,7 @@ func Create(dbPath, targetPath string) (string, error) {
 	return targetPath, nil
 }
 
+// Restore 在覆盖当前数据库前先创建快照，便于恢复失败或误操作后人工找回原始文件。
 func Restore(dbPath, backupPath string) (string, error) {
 	if backupPath == "" {
 		return "", fmt.Errorf("backup path is required")

@@ -1,4 +1,4 @@
-// 文件说明：frontend/src/composables/useServerWorkflow.ts，对应当前模块的数据结构、状态逻辑或工具函数。
+// useServerWorkflow 将本地 Web 服务状态转换成页面可展示的端口、链接和操作。
 import { computed } from 'vue'
 import { getServerAccessLabel, getServerPort } from '../helpers/server'
 import { useBookmarkStore } from '../stores/bookmarks'
@@ -13,6 +13,7 @@ export const useServerWorkflow = () => {
   )
 
   const toggleServer = async () => {
+    // 开关动作通过 store 执行，保证其他页面依赖的 server 状态同步刷新。
     await store.toggleServer()
   }
 
