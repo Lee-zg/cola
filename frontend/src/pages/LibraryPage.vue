@@ -9,12 +9,12 @@ import {
   NInput,
   NRadioButton,
   NRadioGroup,
-  NScrollbar,
   NSpace,
   NTag,
   NThing
 } from 'naive-ui'
 import BookmarkEditorDrawer from '../components/BookmarkEditorDrawer.vue'
+import ColaScrollbar from '../components/ColaScrollbar.vue'
 import { useBookmarkLibrary } from '../composables/useBookmarkLibrary'
 import { useUiCommands } from '../composables/useUiCommands'
 import { appIcons } from '../icons'
@@ -57,7 +57,7 @@ const tagOptions = computed(() => [''].concat(library.tags.value))
 
       <section class="filter-block">
         <h3>分类</h3>
-        <NScrollbar class="filter-scroll" trigger="none">
+        <ColaScrollbar class="filter-scroll" aria-label="分类筛选滚动区" compact>
           <button
             v-for="folder in folderOptions"
             :key="folder || 'all-folders'"
@@ -69,12 +69,12 @@ const tagOptions = computed(() => [''].concat(library.tags.value))
             <NIcon :component="appIcons.folder" />
             <span>{{ folder || '全部分类' }}</span>
           </button>
-        </NScrollbar>
+        </ColaScrollbar>
       </section>
 
       <section class="filter-block">
         <h3>标签</h3>
-        <NScrollbar class="filter-scroll" trigger="none">
+        <ColaScrollbar class="filter-scroll" aria-label="标签筛选滚动区" compact>
           <button
             v-for="tag in tagOptions"
             :key="tag || 'all-tags'"
@@ -86,7 +86,7 @@ const tagOptions = computed(() => [''].concat(library.tags.value))
             <NIcon :component="appIcons.tags" />
             <span>{{ tag || '全部标签' }}</span>
           </button>
-        </NScrollbar>
+        </ColaScrollbar>
       </section>
 
       <NButton class="wide-action" type="primary" block @click="library.createBookmark">
@@ -123,7 +123,7 @@ const tagOptions = computed(() => [''].concat(library.tags.value))
         </NSpace>
       </div>
 
-      <NScrollbar class="library-scroll">
+      <ColaScrollbar class="library-scroll" aria-label="书签列表滚动区">
         <div v-if="library.items.value.length" class="bookmark-list" :class="`mode-${library.viewMode.value}`">
           <NCard
             v-for="item in library.items.value"
@@ -157,7 +157,7 @@ const tagOptions = computed(() => [''].concat(library.tags.value))
             <NButton type="primary" @click="library.createBookmark">新增第一个书签</NButton>
           </template>
         </NEmpty>
-      </NScrollbar>
+      </ColaScrollbar>
     </main>
 
     <BookmarkEditorDrawer

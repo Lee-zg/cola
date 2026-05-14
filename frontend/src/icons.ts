@@ -18,6 +18,7 @@ import {
   LinkOutline,
   MoonOutline,
   OpenOutline,
+  PlayForwardOutline,
   PricetagsOutline,
   RefreshOutline,
   RemoveOutline,
@@ -52,6 +53,7 @@ export type AppIconKey =
   | 'minimise'
   | 'moon'
   | 'open'
+  | 'overflow'
   | 'refresh'
   | 'save'
   | 'search'
@@ -82,6 +84,7 @@ export const appIcons: Record<AppIconKey, Component> = {
   minimise: RemoveOutline,
   moon: MoonOutline,
   open: OpenOutline,
+  overflow: PlayForwardOutline,
   refresh: RefreshOutline,
   save: SaveOutline,
   search: SearchOutline,

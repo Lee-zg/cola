@@ -27,7 +27,9 @@
 html,
 body,
 #app {
-  min-height: 100%;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 body {
@@ -73,7 +75,8 @@ a {
 }
 
 .desktop-frame {
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   display: grid;
   grid-template-rows: 40px minmax(0, 1fr);
   background:
@@ -148,20 +151,26 @@ a {
 }
 
 .app-shell {
+  height: 100%;
   min-height: 0;
   display: grid;
   grid-template-columns: 82px minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .app-main {
   min-width: 0;
   min-height: 0;
+  height: 100%;
   display: grid;
   grid-template-rows: 72px minmax(0, 1fr) 34px;
+  overflow: hidden;
 }
 
 .nav-rail {
+  position: relative;
   min-height: 0;
+  height: 100%;
   border-right: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
   background: var(--panel-strong);
   color: var(--panel);
@@ -186,9 +195,19 @@ a {
 
 .nav-stack {
   min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 10px;
+  position: relative;
+}
+
+.nav-visible-groups {
+  min-height: 0;
   display: grid;
   align-content: start;
   gap: 10px;
+  overflow: hidden;
 }
 
 .nav-group {
@@ -202,11 +221,31 @@ a {
   margin: 3px 8px;
 }
 
+.nav-overflow {
+  position: relative;
+  display: grid;
+  justify-items: center;
+}
+
 .nav-item.n-button {
   position: relative;
   width: 62px;
-  height: 50px;
+  height: 52px;
   padding: 5px 0;
+  --n-color: transparent !important;
+  --n-color-hover: rgb(255 255 255 / 9%) !important;
+  --n-color-pressed: rgb(255 255 255 / 14%) !important;
+  --n-color-focus: rgb(255 255 255 / 12%) !important;
+  --n-color-disabled: transparent !important;
+  --n-ripple-color: color-mix(in srgb, var(--accent) 60%, white 40%) !important;
+  --n-text-color: rgb(255 255 255 / 72%) !important;
+  --n-text-color-hover: #ffffff !important;
+  --n-text-color-pressed: #ffffff !important;
+  --n-text-color-focus: #ffffff !important;
+  --n-border: 1px solid transparent !important;
+  --n-border-hover: 1px solid rgb(255 255 255 / 18%) !important;
+  --n-border-pressed: 1px solid rgb(255 255 255 / 24%) !important;
+  --n-border-focus: 1px solid rgb(255 255 255 / 28%) !important;
   color: rgb(255 255 255 / 72%);
   border: 1px solid transparent;
   border-radius: 8px;
@@ -215,7 +254,7 @@ a {
 .nav-item.n-button .n-button__content {
   display: grid;
   place-items: center;
-  gap: 2px;
+  gap: 3px;
 }
 
 .nav-item::before {
@@ -229,6 +268,14 @@ a {
   background: transparent;
 }
 
+.nav-item.n-button:focus,
+.nav-item.n-button:focus-visible {
+  background: rgb(255 255 255 / 12%);
+  color: #ffffff;
+  outline: 2px solid color-mix(in srgb, var(--accent) 64%, white 36%);
+  outline-offset: 2px;
+}
+
 .nav-item.active {
   border-color: rgb(255 255 255 / 18%);
   background: rgb(255 255 255 / 11%);
@@ -239,17 +286,139 @@ a {
   background: color-mix(in srgb, var(--accent) 78%, white 22%);
 }
 
+.nav-overflow-trigger.active {
+  background:
+    radial-gradient(circle at 50% 12%, rgb(255 255 255 / 24%), transparent 36%),
+    rgb(255 255 255 / 12%);
+}
+
+.nav-overflow-icon {
+  transform: rotate(90deg);
+}
+
+.nav-overflow-panel {
+  position: absolute;
+  left: calc(100% + 12px);
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(560px, calc(100vw - 128px));
+  overflow-x: auto;
+  padding: 8px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, transparent), transparent 44%),
+    color-mix(in srgb, var(--panel-strong) 94%, black 6%);
+  box-shadow:
+    0 22px 46px rgb(35 26 20 / 30%),
+    inset 0 1px 0 rgb(255 255 255 / 16%);
+  backdrop-filter: blur(18px);
+  scrollbar-width: none;
+}
+
+.nav-overflow-panel::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.nav-overflow-panel::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  bottom: 22px;
+  width: 10px;
+  height: 10px;
+  border-left: 1px solid rgb(255 255 255 / 16%);
+  border-bottom: 1px solid rgb(255 255 255 / 16%);
+  background: color-mix(in srgb, var(--panel-strong) 94%, black 6%);
+  transform: rotate(45deg);
+}
+
+.nav-overflow-item {
+  position: relative;
+  z-index: 1;
+  min-width: 76px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: rgb(255 255 255 / 74%);
+  cursor: pointer;
+  padding: 6px 9px;
+  white-space: nowrap;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.nav-overflow-item:hover,
+.nav-overflow-item:focus-visible,
+.nav-overflow-item.active {
+  border-color: rgb(255 255 255 / 20%);
+  background: rgb(255 255 255 / 12%);
+  color: #ffffff;
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.nav-overflow-item .n-icon {
+  color: color-mix(in srgb, var(--accent) 78%, white 22%);
+  font-size: 22px;
+}
+
+.nav-overflow-item span {
+  max-width: 76px;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.18;
+  text-overflow: ellipsis;
+}
+
+.nav-overflow-pop-enter-active,
+.nav-overflow-pop-leave-active {
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.nav-overflow-pop-enter-from,
+.nav-overflow-pop-leave-to {
+  opacity: 0;
+  transform: translateX(-6px) scale(0.98);
+}
+
+@media (max-height: 520px) {
+  .nav-rail {
+    gap: 10px;
+    padding-block: 10px;
+  }
+
+  .nav-brand {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+}
+
 .nav-icon {
-  font-size: 21px;
+  font-size: 23px;
 }
 
 .nav-text {
-  max-width: 58px;
+  max-width: 60px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 10px;
-  line-height: 1.15;
+  font-size: 11px;
+  line-height: 1.18;
 }
 
 .topbar {
@@ -318,6 +487,7 @@ a {
 .workspace {
   min-width: 0;
   min-height: 0;
+  height: 100%;
   overflow: hidden;
   padding: 18px;
 }
@@ -326,6 +496,7 @@ a {
   min-width: 0;
   min-height: 0;
   height: 100%;
+  max-width: 100%;
 }
 
 .panel-surface,
@@ -547,14 +718,17 @@ a {
   color: var(--muted);
 }
 
+.dashboard-scroll {
+  min-height: 0;
+}
+
 .dashboard-grid {
   min-height: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   grid-auto-rows: minmax(126px, auto);
   gap: 14px;
-  overflow: auto;
-  padding-bottom: 2px;
+  padding: 2px 18px 8px 2px;
 }
 
 .metric-card {
@@ -583,6 +757,7 @@ a {
 .export-page,
 .backup-page,
 .ai-page {
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.8fr);
   gap: 16px;
@@ -603,6 +778,7 @@ a {
 .settings-card,
 .server-card {
   min-height: 0;
+  max-width: 100%;
 }
 
 .workflow-card .n-card__content,
@@ -705,6 +881,7 @@ a {
 
 .split-page,
 .webserver-page {
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
@@ -726,8 +903,7 @@ a {
   border: 1px dashed color-mix(in srgb, var(--accent) 42%, var(--line));
   border-radius: 8px;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--accent-soft) 70%, transparent), transparent),
-    var(--panel);
+    linear-gradient(135deg, color-mix(in srgb, var(--accent-soft) 70%, transparent), transparent), var(--panel);
   color: var(--muted);
   font-weight: 800;
 }
@@ -815,6 +991,11 @@ a {
     animation-duration: 1ms !important;
     scroll-behavior: auto !important;
   }
+
+  .nav-overflow-pop-enter-active,
+  .nav-overflow-pop-leave-active {
+    transition-duration: 1ms !important;
+  }
 }
 
 @media (max-width: 980px) {
@@ -828,6 +1009,10 @@ a {
 
   .nav-item.n-button {
     width: 54px;
+  }
+
+  .nav-overflow-panel {
+    max-width: min(500px, calc(100vw - 104px));
   }
 
   .nav-text {
@@ -887,13 +1072,14 @@ a {
 
 @media (max-width: 720px) {
   body {
-    overflow: auto;
+    overflow: hidden;
   }
 
   .desktop-frame,
   .app-shell,
   .app-main {
-    min-height: 100vh;
+    height: 100vh;
+    min-height: 0;
   }
 
   .window-titlecopy span {
@@ -901,7 +1087,6 @@ a {
   }
 
   .workspace {
-    overflow: auto;
     padding: 12px;
   }
 
@@ -910,9 +1095,12 @@ a {
     flex-direction: column;
   }
 
+  .dashboard-hero .n-space {
+    width: 100%;
+  }
+
   .dashboard-grid {
     grid-template-columns: 1fr;
-    overflow: visible;
   }
 
   .recent-panel {

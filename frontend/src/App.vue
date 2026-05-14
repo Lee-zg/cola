@@ -8,6 +8,7 @@ import {
   NLoadingBarProvider,
   NMessageProvider
 } from 'naive-ui'
+import ColaScrollbar from './components/ColaScrollbar.vue'
 import NavRail from './components/NavRail.vue'
 import StatusBar from './components/StatusBar.vue'
 import TopBar from './components/TopBar.vue'
@@ -76,11 +77,11 @@ const activeThemeOverrides = computed(() => (theme.isDark.value ? darkThemeOverr
                   @update:query="shell.query.value = $event"
                 />
 
-                <div class="workspace">
+                <ColaScrollbar class="workspace" aria-label="页面内容滚动区">
                   <Transition name="route-fade" mode="out-in">
                     <component :is="currentComponent" :key="shell.currentPath.value" @navigate="shell.navigate" />
                   </Transition>
-                </div>
+                </ColaScrollbar>
 
                 <StatusBar
                   :loading="shell.loading.value"
