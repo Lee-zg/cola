@@ -13,3 +13,4 @@ frontend/package.json.md5
 .coverage
 .DS_Store
 Thumbs.db
+.history

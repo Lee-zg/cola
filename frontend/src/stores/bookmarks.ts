@@ -20,6 +20,7 @@ export const useBookmarkStore = defineStore('bookmarks', {
     templates: [] as ThemeManifest[],
     selected: null as Bookmark | null,
     draft: blankInput(),
+    editorOpen: false,
     query: '',
     folder: '',
     tag: '',
@@ -56,7 +57,7 @@ export const useBookmarkStore = defineStore('bookmarks', {
         this.loading = false
       }
     },
-    select(item: Bookmark | null) {
+    select(item: Bookmark | null, openEditor = false) {
       this.selected = item
       this.draft = item
         ? {
@@ -69,6 +70,9 @@ export const useBookmarkStore = defineStore('bookmarks', {
             aliases: [...item.aliases]
           }
         : blankInput()
+      if (openEditor) {
+        this.editorOpen = true
+      }
     },
     async save() {
       const saved = this.selected
