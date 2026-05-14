@@ -1,3 +1,4 @@
+// 文件说明：frontend/src/stores/bookmarks.ts，对应当前模块的数据结构、状态逻辑或工具函数。
 import { defineStore } from 'pinia'
 import { api } from '../api'
 import { blankBookmarkInput, toBookmarkInput } from '../helpers/bookmarkLists'

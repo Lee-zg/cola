@@ -1,33 +1,36 @@
-# Security Policy
+# 安全策略
 
-## Supported Versions
+## 支持版本
 
-The project is in early development. Security fixes target the latest `main` branch and the latest tagged release.
+项目目前处于早期开发阶段。安全修复默认面向最新 `main` 分支和最新发布标签版本。
 
-## Reporting a Vulnerability
+## 漏洞报告
 
-Please do not open a public issue for exploitable vulnerabilities.
+请不要通过公开 issue 报告可利用漏洞。
 
-Report privately by emailing the maintainer listed in the GitHub repository profile, or by opening a GitHub Security Advisory if enabled for the repository.
+请通过以下方式私下报告：
 
-Include:
+- 向 GitHub 仓库维护者主页中的邮箱发送邮件；
+- 如果仓库开启了 GitHub Security Advisory，可直接提交安全通告。
 
-- Affected version or commit.
-- Reproduction steps.
-- Impact and affected platform.
-- Any relevant logs, sample files, or proof of concept.
+报告内容建议包含：
 
-## Security Scope
+- 受影响版本或提交号；
+- 复现步骤；
+- 影响范围和受影响平台；
+- 相关日志、样例文件或 PoC。
 
-High-priority areas:
+## 安全关注范围
 
-- Bookmark import parsing.
-- Static HTML export escaping.
-- Local Web server access control.
-- Backup and restore behavior.
-- Theme package validation.
-- Dependency vulnerabilities.
+高优先级区域：
 
-## Privacy Boundary
+- 书签导入解析；
+- 静态 HTML 导出转义；
+- 本地 Web 服务访问控制；
+- 备份与恢复行为；
+- 主题包校验；
+- 依赖漏洞。
 
-Cola Bookmarks is designed to keep bookmark data local. Changes that upload bookmark content, browsing data, analysis results, or telemetry require explicit product review and documentation before they can be accepted.
+## 隐私边界
+
+Cola Bookmarks 设计目标是书签数据本地留存。任何涉及上传书签内容、浏览数据、分析结果或遥测的变更，都必须先完成明确的产品评审和文档说明后才可接受。

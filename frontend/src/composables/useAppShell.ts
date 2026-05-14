@@ -1,3 +1,4 @@
+// 文件说明：frontend/src/composables/useAppShell.ts，对应当前模块的数据结构、状态逻辑或工具函数。
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { routes } from '../navigation'
 import { useHashRoute } from '../router'

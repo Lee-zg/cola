@@ -1,3 +1,4 @@
+// 文件说明：frontend/src/composables/useImportWorkflow.ts，对应当前模块的数据结构、状态逻辑或工具函数。
 import { ref } from 'vue'
 import { importSourceOptions, type ImportHistoryRecord } from '../helpers/workflow'
 import { useBookmarkStore } from '../stores/bookmarks'

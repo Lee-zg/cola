@@ -1,3 +1,4 @@
+// 文件说明：frontend/src/composables/useBackupWorkflow.ts，对应当前模块的数据结构、状态逻辑或工具函数。
 import { computed, ref } from 'vue'
 import { canRestoreBackup, createBackupHistoryEntry, getRestoreValidationMessage } from '../helpers/backup'
 import type { BackupHistoryEntry } from '../helpers/workflow'

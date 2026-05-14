@@ -1,18 +1,24 @@
+<!-- 文件说明：frontend/src/pages/ExportPage.vue，对应当前模块的界面或交互逻辑。 -->
 <script setup lang="ts">
+import { computed } from 'vue'
+import { NAlert, NButton, NCard, NEmpty, NIcon, NInput, NRadioButton, NRadioGroup, NSpace, NTag } from 'naive-ui'
 import { useExportWorkflow } from '../composables/useExportWorkflow'
+import { appIcons, workflowIcons } from '../icons'
 
 const workflow = useExportWorkflow()
+
+const selectedTemplateName = computed(() => workflow.selectedTemplate.value?.name ?? '未选择模板')
 </script>
 
 <template>
   <section class="page export-page">
-    <section class="surface">
-      <div class="section-head">
+    <NCard class="workflow-card" :bordered="false">
+      <template #header>
         <div>
-          <span class="eyebrow">Themes</span>
+          <span class="eyebrow">THEMES</span>
           <h2>模板画廊</h2>
         </div>
-      </div>
+      </template>
 
       <div class="template-grid">
         <button
@@ -23,45 +29,53 @@ const workflow = useExportWorkflow()
           type="button"
           @click="workflow.selectTemplate(template.id)"
         >
-          <span class="template-preview">{{ template.name.slice(0, 2).toUpperCase() }}</span>
+          <span class="template-preview">
+            <NIcon :component="workflowIcons[template.id] || workflowIcons.default" />
+          </span>
           <strong>{{ template.name }}</strong>
           <small>{{ template.description || template.author || template.id }}</small>
+          <NTag v-if="workflow.templateId.value === template.id" size="small" round type="success">选中</NTag>
         </button>
-        <div v-if="!workflow.templates.value.length" class="empty">暂无可用模板</div>
+        <NEmpty v-if="!workflow.templates.value.length" description="暂无可用模板" />
       </div>
-    </section>
+    </NCard>
 
-    <section class="surface flow-panel">
-      <div class="section-head">
+    <NCard class="workflow-side-card" :bordered="false">
+      <template #header>
         <div>
-          <span class="eyebrow">Export</span>
+          <span class="eyebrow">EXPORT</span>
           <h2>导出 HTML</h2>
         </div>
-      </div>
+      </template>
 
-      <div v-if="workflow.selectedTemplate.value" class="selected-template">
-        <strong>{{ workflow.selectedTemplate.value.name }}</strong>
-        <span>{{ workflow.selectedTemplate.value.description || '当前选择的导出主题模板' }}</span>
-      </div>
+      <NAlert type="info" :show-icon="false">
+        当前模板：{{ selectedTemplateName }}。导出会调用现有后端生成静态 HTML。
+      </NAlert>
 
-      <div class="radio-row">
-        <label><input v-model="workflow.exportScope.value" type="radio" value="all" /> 全部书签</label>
-        <label><input v-model="workflow.exportScope.value" type="radio" value="filtered" /> 当前筛选结果</label>
-      </div>
+      <NRadioGroup v-model:value="workflow.exportScope.value">
+        <NSpace>
+          <NRadioButton value="all">全部书签</NRadioButton>
+          <NRadioButton value="filtered">当前筛选结果</NRadioButton>
+        </NSpace>
+      </NRadioGroup>
 
-      <label class="field">
-        <span>输出路径</span>
-        <input v-model="workflow.exportPath.value" placeholder="导出 HTML 路径，例如 D:\\bookmarks.html" />
-      </label>
+      <NInput v-model:value="workflow.exportPath.value" placeholder="导出 HTML 路径，例如 D:\\bookmarks.html">
+        <template #prefix>
+          <NIcon :component="appIcons.document" />
+        </template>
+      </NInput>
 
-      <button
-        class="primary-action"
-        type="button"
+      <NButton
+        type="primary"
         :disabled="workflow.exporting.value || !workflow.templates.value.length"
+        :loading="workflow.exporting.value"
         @click="workflow.exportHtml"
       >
-        {{ workflow.exporting.value ? '导出中' : '导出 HTML' }}
-      </button>
-    </section>
+        <template #icon>
+          <NIcon :component="appIcons.export" />
+        </template>
+        导出 HTML
+      </NButton>
+    </NCard>
   </section>
 </template>

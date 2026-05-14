@@ -1,3 +1,4 @@
+// 文件说明：frontend/src/App.test.ts，对应当前模块的数据结构、状态逻辑或工具函数。
 import { describe, expect, it } from 'vitest'
 
 const filterBookmarks = (items: Array<{ title: string; tags: string[] }>, query: string, tag: string) =>

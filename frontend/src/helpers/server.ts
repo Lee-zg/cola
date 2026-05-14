@@ -1,3 +1,4 @@
+// 文件说明：frontend/src/helpers/server.ts，对应当前模块的数据结构、状态逻辑或工具函数。
 import type { ServerStatus } from '../types'
 
 export const getServerPort = (server: ServerStatus): string => {

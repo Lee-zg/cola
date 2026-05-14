@@ -1,3 +1,4 @@
+// 文件说明：internal/bookmark/models.go，负责应用后端或核心业务实现。
 package bookmark
 
 import (

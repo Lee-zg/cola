@@ -1,18 +1,18 @@
-# Contributing to Cola Bookmarks
+# 参与 Cola Bookmarks 贡献指南
 
-Thanks for helping improve Cola Bookmarks. This project is local-first desktop software, so privacy, predictable behavior, and maintainable code matter more than adding features quickly.
+感谢你参与改进 Cola Bookmarks。该项目是本地优先桌面软件，因此隐私、可预测行为和可维护性优先于快速堆叠功能。
 
-## Development Setup
+## 开发环境准备
 
-Requirements:
+依赖要求：
 
-- Go 1.25 or newer
-- Node.js 22.13 or newer
-- npm 10 or newer
-- Wails v2.12.0 or newer
-- Windows WebView2 for Windows builds
+- Go 1.25 或更高版本
+- Node.js 22.13 或更高版本
+- npm 10 或更高版本
+- Wails v2.12.0 或更高版本
+- Windows 构建需要 WebView2
 
-Install and verify:
+安装与校验：
 
 ```powershell
 go mod download
@@ -30,39 +30,39 @@ cd ..
 wails dev
 ```
 
-## Branch Strategy
+## 分支策略
 
-- `main` is always expected to be releasable.
-- Feature branches use `feature/<short-description>`.
-- Bug fixes use `fix/<short-description>`.
-- Documentation-only work uses `docs/<short-description>`.
-- CI/build maintenance uses `chore/<short-description>`.
-- Release preparation uses `release/vX.Y.Z`.
+- `main` 分支始终应保持可发布状态。
+- 功能开发使用 `feature/<short-description>`。
+- 缺陷修复使用 `fix/<short-description>`。
+- 纯文档修改使用 `docs/<short-description>`。
+- CI/构建维护使用 `chore/<short-description>`。
+- 发布准备使用 `release/vX.Y.Z`。
 
-Keep branches focused. Avoid mixing feature work, refactoring, formatting, and dependency updates in one pull request.
+请保持分支聚焦，不要在同一个 PR 中混入功能开发、重构、格式化和依赖升级。
 
-## Commit Message Format
+## 提交信息格式
 
-Use Conventional Commits:
+采用 Conventional Commits：
 
 ```text
 <type>(optional-scope): <summary>
 ```
 
-Accepted types:
+允许的类型：
 
-- `feat`: user-facing feature
-- `fix`: bug fix
-- `docs`: documentation
-- `test`: tests
-- `refactor`: behavior-preserving code change
-- `perf`: performance improvement
-- `build`: build system or dependency changes
-- `ci`: CI configuration
-- `chore`: maintenance
-- `security`: vulnerability fix or hardening
+- `feat`：面向用户的新功能
+- `fix`：缺陷修复
+- `docs`：文档
+- `test`：测试
+- `refactor`：不改变行为的代码重构
+- `perf`：性能优化
+- `build`：构建系统或依赖调整
+- `ci`：持续集成配置
+- `chore`：日常维护
+- `security`：安全修复或加固
 
-Examples:
+示例：
 
 ```text
 feat(importer): support Firefox bookmark import
@@ -70,19 +70,19 @@ fix(exporter): escape bookmark descriptions in static HTML
 ci: add CodeQL workflow
 ```
 
-Breaking changes must include `BREAKING CHANGE:` in the commit body.
+若存在破坏性变更，提交正文必须包含 `BREAKING CHANGE:`。
 
-## Pull Request Requirements
+## Pull Request 要求
 
-Every pull request should include:
+每个 PR 应包含：
 
-- A clear summary of the change.
-- Linked issue when applicable.
-- Test evidence, including exact commands run.
-- Screenshots or short recordings for UI changes.
-- Notes about privacy, local storage, or security impact when relevant.
+- 清晰的变更说明。
+- 相关 issue（如适用）。
+- 测试证据（包含执行命令）。
+- UI 变更的截图或短录屏。
+- 涉及隐私、本地存储或安全时的影响说明。
 
-Before requesting review, run:
+发起评审前请执行：
 
 ```powershell
 cd frontend
@@ -98,47 +98,47 @@ npm run test
 npm run build
 ```
 
-## Code Review
+## 代码评审
 
-At least one maintainer approval is required before merging to `main`.
+合并到 `main` 前至少需要一位维护者批准。
 
-Reviewers should prioritize:
+评审重点：
 
-- Data privacy and local-only guarantees.
-- Security boundaries for imports, exports, local Web access, and theme packages.
-- Tests for new behavior and regression risk.
-- Clear module ownership and maintainable APIs.
-- UI behavior across typical desktop window sizes.
+- 数据隐私和本地化保证是否被破坏。
+- 导入、导出、本地 Web 和主题包的安全边界是否清晰。
+- 新行为与回归风险是否有测试覆盖。
+- 模块职责与 API 是否可维护。
+- 常见桌面窗口尺寸下的 UI 行为是否正常。
 
-Use squash merge for ordinary PRs unless preserving individual commits adds clear value.
+普通 PR 建议使用 squash merge，除非保留独立提交历史有明确价值。
 
-## Testing Policy
+## 测试策略
 
-- Go unit tests live next to packages as `*_test.go`.
-- Integration tests should exercise the public `App` facade or service boundaries.
-- Frontend tests use Vitest.
-- Any importer, exporter, backup, or local Web server change needs a test.
-- Security-sensitive HTML handling needs tests for escaping or rejection behavior.
+- Go 单测放在对应包目录，命名为 `*_test.go`。
+- 集成测试优先覆盖公开 `App` 门面或服务边界。
+- 前端测试使用 Vitest。
+- 导入器、导出器、备份或本地 Web 服务改动必须补测试。
+- 涉及 HTML 安全处理的改动必须覆盖转义或拒绝策略测试。
 
-## Release Process
+## 发布流程
 
-1. Update `VERSION` using SemVer.
-2. Update `CHANGELOG.md`.
-3. Run the full local verification commands.
-4. Create a release PR from `release/vX.Y.Z` to `main`.
-5. After merge, create and push tag `vX.Y.Z`.
-6. GitHub Actions builds the release artifact and creates a GitHub Release.
+1. 按 SemVer 更新 `VERSION`。
+2. 更新 `CHANGELOG.md`。
+3. 本地执行完整校验命令。
+4. 从 `release/vX.Y.Z` 向 `main` 发起发布 PR。
+5. PR 合并后创建并推送标签 `vX.Y.Z`。
+6. GitHub Actions 自动构建发布制品并创建 GitHub Release。
 
-## Dependency Management
+## 依赖管理
 
-- Dependabot opens weekly PRs for Go, npm, and GitHub Actions dependencies.
-- Keep dependency PRs small and separate from feature work.
-- Security updates should be reviewed and merged promptly after CI passes.
-- New runtime dependencies require a short justification in the PR.
+- Dependabot 每周会为 Go、npm、GitHub Actions 依赖创建 PR。
+- 依赖升级 PR 应保持小而独立，不要混入功能代码。
+- 安全更新在 CI 通过后应尽快评估并合并。
+- 新增运行时依赖需要在 PR 里给出简要理由。
 
-## Security and Privacy Expectations
+## 安全与隐私要求
 
-- Do not add telemetry or network upload of bookmark data.
-- Local Web server changes must default to `127.0.0.1`.
-- Imported and exported HTML must be sanitized or escaped.
-- Theme packages must not execute third-party JavaScript.
+- 不得引入书签数据遥测或网络上传。
+- 本地 Web 服务默认必须绑定 `127.0.0.1`。
+- 导入/导出 HTML 必须进行清洗或转义。
+- 主题包不得执行第三方 JavaScript。

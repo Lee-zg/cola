@@ -1,3 +1,4 @@
+// 文件说明：main.go，负责应用后端或核心业务实现。
 package main
 
 import (
@@ -15,13 +16,16 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  "Cola Bookmarks",
-		Width:  1280,
-		Height: 820,
+		Title:     "Cola Bookmarks",
+		Width:     1280,
+		Height:    820,
+		Frameless: true,
+		MinWidth:  960,
+		MinHeight: 620,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 245, G: 247, B: 250, A: 1},
+		BackgroundColour: &options.RGBA{R: 248, G: 245, B: 240, A: 1},
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
 		Bind: []interface{}{

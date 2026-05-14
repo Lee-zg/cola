@@ -1,3 +1,4 @@
+// 文件说明：frontend/src/composables/useDashboard.ts，对应当前模块的数据结构、状态逻辑或工具函数。
 import { computed } from 'vue'
 import { getDashboardStats, getRecentItems, getTopTags, getWebServerSummary } from '../helpers/dashboard'
 import { useBookmarkStore } from '../stores/bookmarks'

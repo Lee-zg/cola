@@ -1,5 +1,7 @@
+<!-- 文件说明：frontend/src/components/BookmarkEditorDrawer.vue，对应当前模块的界面或交互逻辑。 -->
 <script setup lang="ts">
-import { joinList, splitList } from '../helpers/bookmarkLists'
+import { NButton, NDrawer, NDrawerContent, NDynamicTags, NForm, NFormItem, NIcon, NInput, NPopconfirm, NSpace, NTag } from 'naive-ui'
+import { appIcons } from '../icons'
 import type { Bookmark, BookmarkInput } from '../types'
 
 const props = defineProps<{
@@ -21,70 +23,114 @@ const updateTextField = (field: keyof Pick<BookmarkInput, 'title' | 'url' | 'des
   emit('update:draft', { [field]: value })
 }
 
-const updateListField = (field: keyof Pick<BookmarkInput, 'tags' | 'keywords' | 'aliases'>, value: string) => {
-  emit('update:draft', { [field]: splitList(value) })
+const updateListField = (field: keyof Pick<BookmarkInput, 'tags' | 'keywords' | 'aliases'>, value: string[]) => {
+  emit('update:draft', { [field]: value })
+}
+
+const handleDrawerUpdate = (value: boolean) => {
+  if (!value) emit('close')
 }
 </script>
 
 <template>
-  <div v-if="props.open" class="drawer-scrim" @click.self="emit('close')">
-    <form class="editor drawer" @submit.prevent="emit('save')">
-      <div class="editor-head">
+  <NDrawer
+    :show="props.open"
+    :width="520"
+    placement="right"
+    :trap-focus="false"
+    class="bookmark-editor-drawer"
+    @update:show="handleDrawerUpdate"
+  >
+    <NDrawerContent closable>
+      <template #header>
         <div>
-          <span class="eyebrow">{{ props.selected ? '编辑' : '新增' }}</span>
-          <h2>{{ props.selected ? props.draft.title || '编辑书签' : '新增书签' }}</h2>
+          <span class="eyebrow">{{ props.selected ? 'EDIT' : 'CREATE' }}</span>
+          <h2 class="drawer-title">{{ props.selected ? props.draft.title || '编辑书签' : '新增书签' }}</h2>
         </div>
-        <div class="actions">
-          <button type="button" @click="emit('close')">关闭</button>
-          <button type="button" :disabled="!props.selected" @click="emit('analyze')">AI 分析</button>
-          <button type="button" class="danger" :disabled="!props.selected" @click="emit('remove')">删除</button>
-          <button type="submit" class="primary-action">保存</button>
-        </div>
-      </div>
+      </template>
 
-      <label class="field">
-        <span>标题</span>
-        <input :value="props.draft.title" required @input="updateTextField('title', ($event.target as HTMLInputElement).value)" />
-      </label>
-      <label class="field">
-        <span>网址</span>
-        <input :value="props.draft.url" required @input="updateTextField('url', ($event.target as HTMLInputElement).value)" />
-      </label>
-      <label class="field">
-        <span>描述</span>
-        <textarea
-          :value="props.draft.description"
-          rows="5"
-          @input="updateTextField('description', ($event.target as HTMLTextAreaElement).value)"
-        ></textarea>
-      </label>
-      <div class="two-col">
-        <label class="field">
-          <span>分类</span>
-          <input :value="props.draft.folder" @input="updateTextField('folder', ($event.target as HTMLInputElement).value)" />
-        </label>
-        <label class="field">
-          <span>标签</span>
-          <input :value="joinList(props.draft.tags)" @input="updateListField('tags', ($event.target as HTMLInputElement).value)" />
-        </label>
-      </div>
-      <div class="two-col">
-        <label class="field">
-          <span>关键词</span>
-          <input
-            :value="joinList(props.draft.keywords)"
-            @input="updateListField('keywords', ($event.target as HTMLInputElement).value)"
+      <NForm class="editor-form" label-placement="top" @submit.prevent="emit('save')">
+        <NFormItem label="标题" required>
+          <NInput
+            :value="props.draft.title"
+            placeholder="书签标题"
+            @update:value="updateTextField('title', $event)"
           />
-        </label>
-        <label class="field">
-          <span>别名</span>
-          <input
-            :value="joinList(props.draft.aliases)"
-            @input="updateListField('aliases', ($event.target as HTMLInputElement).value)"
+        </NFormItem>
+
+        <NFormItem label="网址" required>
+          <NInput :value="props.draft.url" placeholder="https://example.com" @update:value="updateTextField('url', $event)">
+            <template #prefix>
+              <NIcon :component="appIcons.link" />
+            </template>
+          </NInput>
+        </NFormItem>
+
+        <NFormItem label="描述">
+          <NInput
+            :value="props.draft.description"
+            type="textarea"
+            :autosize="{ minRows: 4, maxRows: 8 }"
+            placeholder="用于搜索和 AI 复审的简短描述"
+            @update:value="updateTextField('description', $event)"
           />
-        </label>
-      </div>
-      <p class="status">{{ props.status }}</p>
-    </form>
-  </div>
+        </NFormItem>
+
+        <NFormItem label="分类">
+          <NInput :value="props.draft.folder" placeholder="例如 Work" @update:value="updateTextField('folder', $event)">
+            <template #prefix>
+              <NIcon :component="appIcons.folder" />
+            </template>
+          </NInput>
+        </NFormItem>
+
+        <NFormItem label="标签">
+          <NDynamicTags :value="props.draft.tags" @update:value="updateListField('tags', $event)" />
+        </NFormItem>
+
+        <NFormItem label="关键词">
+          <NDynamicTags :value="props.draft.keywords" @update:value="updateListField('keywords', $event)" />
+        </NFormItem>
+
+        <NFormItem label="别名">
+          <NDynamicTags :value="props.draft.aliases" @update:value="updateListField('aliases', $event)" />
+        </NFormItem>
+
+        <div v-if="props.selected" class="editor-meta">
+          <NTag size="small" round>{{ props.selected.domain || '本地书签' }}</NTag>
+          <span>更新于 {{ props.selected.updatedAt || '-' }}</span>
+        </div>
+      </NForm>
+
+      <template #footer>
+        <NSpace justify="space-between" align="center" class="drawer-footer">
+          <span class="drawer-status">{{ props.status || '等待编辑' }}</span>
+          <NSpace :size="8">
+            <NButton :disabled="!props.selected" secondary @click="emit('analyze')">
+              <template #icon>
+                <NIcon :component="appIcons.ai" />
+              </template>
+              AI
+            </NButton>
+            <NPopconfirm :disabled="!props.selected" positive-text="删除" negative-text="取消" @positive-click="emit('remove')">
+              <template #trigger>
+                <NButton :disabled="!props.selected" type="error" secondary>
+                  <template #icon>
+                    <NIcon :component="appIcons.trash" />
+                  </template>
+                </NButton>
+              </template>
+              删除当前书签？
+            </NPopconfirm>
+            <NButton type="primary" @click="emit('save')">
+              <template #icon>
+                <NIcon :component="appIcons.save" />
+              </template>
+              保存
+            </NButton>
+          </NSpace>
+        </NSpace>
+      </template>
+    </NDrawerContent>
+  </NDrawer>
 </template>

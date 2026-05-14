@@ -1,3 +1,4 @@
+// 文件说明：frontend/src/composables/workflows.test.ts，对应当前模块的数据结构、状态逻辑或工具函数。
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
