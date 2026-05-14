@@ -1,16 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useBookmarkStore } from '../stores/bookmarks'
+import { useDashboard } from '../composables/useDashboard'
 
 const emit = defineEmits<{
   navigate: [path: '/library' | '/import' | '/webserver' | '/ai']
 }>()
 
-const store = useBookmarkStore()
-
-const recentItems = computed(() => store.items.slice(0, 5))
-const pendingAiCount = computed(() => store.items.filter((item) => !item.lastAnalyzedAt).length)
-const topTags = computed(() => store.tags.slice(0, 10))
+const dashboard = useDashboard()
 </script>
 
 <template>
@@ -18,19 +13,19 @@ const topTags = computed(() => store.tags.slice(0, 10))
     <div class="metric-grid">
       <article class="metric-card">
         <span>总书签</span>
-        <strong>{{ store.total }}</strong>
+        <strong>{{ dashboard.stats.value.total }}</strong>
       </article>
       <article class="metric-card">
         <span>分类数</span>
-        <strong>{{ store.folders.length }}</strong>
+        <strong>{{ dashboard.stats.value.folderCount }}</strong>
       </article>
       <article class="metric-card">
         <span>标签数</span>
-        <strong>{{ store.tags.length }}</strong>
+        <strong>{{ dashboard.stats.value.tagCount }}</strong>
       </article>
       <article class="metric-card">
         <span>待 AI 分析</span>
-        <strong>{{ pendingAiCount }}</strong>
+        <strong>{{ dashboard.stats.value.pendingAiCount }}</strong>
       </article>
     </div>
 
@@ -45,7 +40,7 @@ const topTags = computed(() => store.tags.slice(0, 10))
         </div>
         <div class="compact-list">
           <button
-            v-for="item in recentItems"
+            v-for="item in dashboard.recentItems.value"
             :key="item.id"
             class="compact-row"
             type="button"
@@ -54,7 +49,7 @@ const topTags = computed(() => store.tags.slice(0, 10))
             <span>{{ item.title }}</span>
             <small>{{ item.folder }} · {{ item.domain || item.url }}</small>
           </button>
-          <div v-if="!recentItems.length" class="empty">暂无书签数据</div>
+          <div v-if="!dashboard.recentItems.value.length" class="empty">暂无书签数据</div>
         </div>
       </section>
 
@@ -67,15 +62,15 @@ const topTags = computed(() => store.tags.slice(0, 10))
         </div>
         <div class="tag-cloud">
           <button
-            v-for="tag in topTags"
+            v-for="tag in dashboard.topTags.value"
             :key="tag"
             class="tag large"
             type="button"
-            @click="store.tag = tag"
+            @click="dashboard.selectTag(tag)"
           >
             {{ tag }}
           </button>
-          <div v-if="!topTags.length" class="empty inline-empty">暂无标签</div>
+          <div v-if="!dashboard.topTags.value.length" class="empty inline-empty">暂无标签</div>
         </div>
       </section>
 
@@ -83,7 +78,7 @@ const topTags = computed(() => store.tags.slice(0, 10))
         <div>
           <span class="eyebrow">Local Web</span>
           <h2>本地 Web 服务</h2>
-          <p>{{ store.server.running ? store.server.url : '服务未启动，启动后可在局域网访问书签页面。' }}</p>
+          <p>{{ dashboard.webServerSummary.value }}</p>
         </div>
         <button type="button" class="primary-action" @click="emit('navigate', '/webserver')">管理服务</button>
       </section>
@@ -92,7 +87,7 @@ const topTags = computed(() => store.tags.slice(0, 10))
         <div>
           <span class="eyebrow">AI Queue</span>
           <h2>AI 分析队列</h2>
-          <p>当前列表中还有 {{ pendingAiCount }} 条书签未分析。</p>
+          <p>当前列表中还有 {{ dashboard.stats.value.pendingAiCount }} 条书签未分析。</p>
         </div>
         <button type="button" @click="emit('navigate', '/ai')">查看队列</button>
       </section>

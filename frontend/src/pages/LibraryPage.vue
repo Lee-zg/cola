@@ -1,29 +1,21 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { watch } from 'vue'
 import BookmarkEditorDrawer from '../components/BookmarkEditorDrawer.vue'
-import { useBookmarkStore } from '../stores/bookmarks'
-import type { Bookmark } from '../types'
+import { useBookmarkLibrary } from '../composables/useBookmarkLibrary'
+import { useUiCommands } from '../composables/useUiCommands'
 
-const store = useBookmarkStore()
-const viewMode = ref<'list' | 'cards' | 'compact'>('list')
+const library = useBookmarkLibrary()
+const uiCommands = useUiCommands()
 
-const selectedId = computed(() => store.selected?.id ?? '')
-const activeFilters = computed(() => [store.folder, store.tag].filter(Boolean))
-
-const choose = (item: Bookmark) => {
-  store.select(item, true)
-}
-
-const createBookmark = () => {
-  store.select(null, true)
-}
-
-const clearFilters = () => {
-  store.folder = ''
-  store.tag = ''
-}
-
-defineExpose({ createBookmark })
+watch(
+  uiCommands.createBookmarkRequestId,
+  (requestId) => {
+    if (requestId > 0) {
+      library.createBookmark()
+    }
+  },
+  { flush: 'post' }
+)
 </script>
 
 <template>
@@ -34,21 +26,21 @@ defineExpose({ createBookmark })
           <span class="eyebrow">Filters</span>
           <h2>筛选</h2>
         </div>
-        <button type="button" :disabled="!activeFilters.length" @click="clearFilters">清空</button>
+        <button type="button" :disabled="!library.activeFilters.value.length" @click="library.clearFilters">清空</button>
       </div>
 
       <section class="filter-block">
         <h3>分类</h3>
-        <button class="filter-chip" :class="{ active: !store.folder }" type="button" @click="store.folder = ''">
+        <button class="filter-chip" :class="{ active: !library.folder.value }" type="button" @click="library.folder.value = ''">
           全部
         </button>
         <button
-          v-for="folder in store.folders"
+          v-for="folder in library.folders.value"
           :key="folder"
           class="filter-chip"
-          :class="{ active: store.folder === folder }"
+          :class="{ active: library.folder.value === folder }"
           type="button"
-          @click="store.folder = folder"
+          @click="library.folder.value = folder"
         >
           {{ folder }}
         </button>
@@ -56,47 +48,47 @@ defineExpose({ createBookmark })
 
       <section class="filter-block">
         <h3>标签</h3>
-        <button class="filter-chip" :class="{ active: !store.tag }" type="button" @click="store.tag = ''">
+        <button class="filter-chip" :class="{ active: !library.tag.value }" type="button" @click="library.tag.value = ''">
           全部
         </button>
         <button
-          v-for="tag in store.tags"
+          v-for="tag in library.tags.value"
           :key="tag"
           class="filter-chip"
-          :class="{ active: store.tag === tag }"
+          :class="{ active: library.tag.value === tag }"
           type="button"
-          @click="store.tag = tag"
+          @click="library.tag.value = tag"
         >
           {{ tag }}
         </button>
       </section>
 
-      <button class="primary-action wide" type="button" @click="createBookmark">新建书签</button>
+      <button class="primary-action wide" type="button" @click="library.createBookmark">新建书签</button>
     </aside>
 
     <main class="library-workspace surface">
       <div class="library-toolbar">
         <div>
           <span class="eyebrow">Library</span>
-          <h2>{{ store.total }} 个书签</h2>
+          <h2>{{ library.total.value }} 个书签</h2>
         </div>
         <div class="segmented" aria-label="视图切换">
-          <button type="button" :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">列表</button>
-          <button type="button" :class="{ active: viewMode === 'cards' }" @click="viewMode = 'cards'">卡片</button>
-          <button type="button" :class="{ active: viewMode === 'compact' }" @click="viewMode = 'compact'">
+          <button type="button" :class="{ active: library.viewMode.value === 'list' }" @click="library.viewMode.value = 'list'">列表</button>
+          <button type="button" :class="{ active: library.viewMode.value === 'cards' }" @click="library.viewMode.value = 'cards'">卡片</button>
+          <button type="button" :class="{ active: library.viewMode.value === 'compact' }" @click="library.viewMode.value = 'compact'">
             紧凑
           </button>
         </div>
       </div>
 
-      <div class="bookmark-list" :class="`mode-${viewMode}`">
+      <div class="bookmark-list" :class="`mode-${library.viewMode.value}`">
         <button
-          v-for="item in store.items"
+          v-for="item in library.items.value"
           :key="item.id"
           class="bookmark-row"
-          :class="{ active: selectedId === item.id }"
+          :class="{ active: library.selectedId.value === item.id }"
           type="button"
-          @click="choose(item)"
+          @click="library.selectBookmark(item)"
         >
           <span class="title">{{ item.title }}</span>
           <span class="url">{{ item.url }}</span>
@@ -105,10 +97,20 @@ defineExpose({ createBookmark })
             <span v-for="tag in item.tags" :key="tag" class="tag">{{ tag }}</span>
           </span>
         </button>
-        <div v-if="!store.items.length" class="empty">没有匹配的书签</div>
+        <div v-if="!library.items.value.length" class="empty">没有匹配的书签</div>
       </div>
     </main>
 
-    <BookmarkEditorDrawer :open="store.editorOpen" @close="store.editorOpen = false" />
+    <BookmarkEditorDrawer
+      :draft="library.draft.value"
+      :open="library.editorOpen.value"
+      :selected="library.selected.value"
+      :status="library.status.value"
+      @analyze="library.analyzeSelected"
+      @close="library.closeEditor"
+      @remove="library.removeSelected"
+      @save="library.save"
+      @update:draft="library.updateDraft"
+    />
   </section>
 </template>

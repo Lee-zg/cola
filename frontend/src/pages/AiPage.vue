@@ -1,19 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useBookmarkStore } from '../stores/bookmarks'
+import { useAiWorkflow } from '../composables/useAiWorkflow'
 
-const store = useBookmarkStore()
-const analyzing = ref(false)
-const pendingItems = computed(() => store.items.filter((item) => !item.lastAnalyzedAt))
-
-const analyzeAll = async () => {
-  analyzing.value = true
-  try {
-    await store.analyzeAll()
-  } finally {
-    analyzing.value = false
-  }
-}
+const workflow = useAiWorkflow()
 </script>
 
 <template>
@@ -22,10 +10,10 @@ const analyzeAll = async () => {
       <div>
         <span class="eyebrow">AI Assistant</span>
         <h2>批量分析</h2>
-        <p>为书签补全描述、关键词、标签等元数据。当前列表待分析 {{ pendingItems.length }} 条。</p>
+        <p>为书签补全描述、关键词、标签等元数据。当前列表待分析 {{ workflow.pendingItems.value.length }} 条。</p>
       </div>
-      <button class="primary-action" type="button" :disabled="analyzing" @click="analyzeAll">
-        {{ analyzing ? '分析中' : '全部 AI 分析' }}
+      <button class="primary-action" type="button" :disabled="workflow.analyzing.value" @click="workflow.analyzeAll">
+        {{ workflow.analyzing.value ? '分析中' : '全部 AI 分析' }}
       </button>
     </section>
 
@@ -38,16 +26,16 @@ const analyzeAll = async () => {
       </div>
       <div class="compact-list">
         <button
-          v-for="item in pendingItems"
+          v-for="item in workflow.pendingItems.value"
           :key="item.id"
           class="compact-row"
           type="button"
-          @click="store.select(item)"
+          @click="workflow.selectForReview(item)"
         >
           <span>{{ item.title }}</span>
           <small>{{ item.url }}</small>
         </button>
-        <div v-if="!pendingItems.length" class="empty">当前列表没有待分析书签</div>
+        <div v-if="!workflow.pendingItems.value.length" class="empty">当前列表没有待分析书签</div>
       </div>
     </section>
 

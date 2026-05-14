@@ -1,16 +1,7 @@
 import { defineStore } from 'pinia'
 import { api } from '../api'
+import { blankBookmarkInput, toBookmarkInput } from '../helpers/bookmarkLists'
 import type { Bookmark, BookmarkInput, ServerStatus, ThemeManifest } from '../types'
-
-const blankInput = (): BookmarkInput => ({
-  title: '',
-  url: '',
-  description: '',
-  folder: 'Unsorted',
-  tags: [],
-  keywords: [],
-  aliases: []
-})
 
 export const useBookmarkStore = defineStore('bookmarks', {
   state: () => ({
@@ -19,8 +10,7 @@ export const useBookmarkStore = defineStore('bookmarks', {
     tags: [] as string[],
     templates: [] as ThemeManifest[],
     selected: null as Bookmark | null,
-    draft: blankInput(),
-    editorOpen: false,
+    draft: blankBookmarkInput() as BookmarkInput,
     query: '',
     folder: '',
     tag: '',
@@ -57,22 +47,31 @@ export const useBookmarkStore = defineStore('bookmarks', {
         this.loading = false
       }
     },
-    select(item: Bookmark | null, openEditor = false) {
-      this.selected = item
-      this.draft = item
-        ? {
-            title: item.title,
-            url: item.url,
-            description: item.description,
-            folder: item.folder,
-            tags: [...item.tags],
-            keywords: [...item.keywords],
-            aliases: [...item.aliases]
-          }
-        : blankInput()
-      if (openEditor) {
-        this.editorOpen = true
+    setStatus(message: string) {
+      this.status = message
+    },
+    setQuery(query: string) {
+      this.query = query
+    },
+    setFolder(folder: string) {
+      this.folder = folder
+    },
+    setTag(tag: string) {
+      this.tag = tag
+    },
+    clearFilters() {
+      this.folder = ''
+      this.tag = ''
+    },
+    updateDraft(patch: Partial<BookmarkInput>) {
+      this.draft = {
+        ...this.draft,
+        ...patch
       }
+    },
+    select(item: Bookmark | null) {
+      this.selected = item
+      this.draft = item ? toBookmarkInput(item) : blankBookmarkInput()
     },
     async save() {
       const saved = this.selected
@@ -112,6 +111,7 @@ export const useBookmarkStore = defineStore('bookmarks', {
     async createBackup(path: string) {
       const result = await api.createBackup(path)
       this.status = `备份已创建：${result.path}`
+      return result
     },
     async restoreBackup(path: string) {
       const result = await api.restoreBackup(path)

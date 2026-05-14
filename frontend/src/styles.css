@@ -1,20 +1,22 @@
 :root {
   color-scheme: light;
-  --bg: #f3f5f1;
-  --panel: #fffefa;
-  --panel-strong: #1f2933;
-  --text: #1a1d21;
-  --muted: #6e7781;
-  --line: #d9ded7;
-  --line-strong: #b7c0b4;
-  --accent: #0f766e;
-  --accent-strong: #0b5f59;
-  --accent-soft: #dcefed;
-  --warning: #b7791f;
-  --danger: #b42318;
-  --danger-soft: #fde8e3;
-  --ink-soft: #edf0eb;
-  --shadow: 0 18px 48px rgb(31 41 51 / 14%);
+  --bg: #f8f5f0;
+  --panel: #ffffff;
+  --panel-strong: #4a423c;
+  --text: #4a423c;
+  --muted: #8a817c;
+  --disabled: #d3ccc6;
+  --line: #e6ddd4;
+  --line-strong: #d3ccc6;
+  --accent: #c28455;
+  --accent-strong: #a66d43;
+  --accent-soft: #f3e4d7;
+  --info: #798c9f;
+  --info-soft: #e5ebf0;
+  --danger: #a95c58;
+  --danger-soft: #f1deda;
+  --ink-soft: #f2ebe4;
+  --shadow: 0 18px 48px rgb(194 132 85 / 10%);
 }
 
 * {
@@ -30,8 +32,8 @@ body,
 body {
   margin: 0;
   background:
-    linear-gradient(135deg, rgb(15 118 110 / 7%), transparent 34%),
-    linear-gradient(315deg, rgb(183 121 31 / 9%), transparent 38%),
+    linear-gradient(135deg, rgb(194 132 85 / 7%), transparent 34%),
+    linear-gradient(315deg, rgb(212 154 110 / 9%), transparent 38%),
     var(--bg);
   color: var(--text);
   font-family: 'Aptos', 'Segoe UI Variable', 'Microsoft YaHei UI', sans-serif;
@@ -88,7 +90,7 @@ input:focus,
 select:focus,
 textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgb(15 118 110 / 14%);
+  box-shadow: 0 0 0 3px rgb(194 132 85 / 16%);
 }
 
 textarea {
@@ -133,7 +135,7 @@ a {
   place-items: center;
   border: 1px solid rgb(255 255 255 / 18%);
   border-radius: 8px;
-  background: #0f766e;
+  background: var(--accent);
   font-weight: 800;
 }
 
@@ -185,7 +187,7 @@ a {
 }
 
 .nav-item.active::before {
-  background: #54d6cc;
+  background: #d49a6e;
 }
 
 .nav-icon {
@@ -301,7 +303,7 @@ kbd {
 }
 
 .danger {
-  border-color: rgb(180 35 24 / 35%);
+  border-color: rgb(169 92 88 / 35%);
   color: var(--danger);
 }
 
@@ -408,7 +410,7 @@ kbd {
   display: grid;
   align-content: space-between;
   background:
-    linear-gradient(135deg, rgb(15 118 110 / 10%), transparent 65%),
+    linear-gradient(135deg, rgb(194 132 85 / 10%), transparent 65%),
     var(--panel);
 }
 
@@ -485,10 +487,10 @@ kbd {
   display: inline-flex;
   align-items: center;
   min-height: 24px;
-  border: 1px solid rgb(15 118 110 / 16%);
+  border: 1px solid rgb(121 140 159 / 22%);
   border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: var(--info-soft);
+  color: var(--info);
   padding: 2px 8px;
   font-size: 12px;
   font-weight: 700;
@@ -636,7 +638,7 @@ kbd {
   z-index: 20;
   display: flex;
   justify-content: flex-end;
-  background: rgb(26 29 33 / 28%);
+  background: rgb(74 66 60 / 28%);
 }
 
 .editor.drawer {
@@ -691,9 +693,9 @@ kbd {
   place-items: center;
   border-radius: 7px;
   background:
-    linear-gradient(135deg, rgb(15 118 110 / 18%), transparent 55%),
-    linear-gradient(315deg, rgb(183 121 31 / 22%), transparent 60%),
-    #f7f7f2;
+    linear-gradient(135deg, rgb(194 132 85 / 18%), transparent 55%),
+    linear-gradient(315deg, rgb(212 154 110 / 22%), transparent 60%),
+    #fbf8f3;
   color: var(--panel-strong);
   font-weight: 900;
 }
@@ -808,8 +810,8 @@ kbd {
 }
 
 .danger-zone {
-  border-color: rgb(180 35 24 / 28%);
-  background: #fffaf8;
+  border-color: rgb(169 92 88 / 28%);
+  background: var(--danger-soft);
 }
 
 .check-row.vertical {
@@ -853,7 +855,7 @@ kbd {
 }
 
 .status-dot.online {
-  background: #16a34a;
+  background: var(--accent);
 }
 
 .status-message {

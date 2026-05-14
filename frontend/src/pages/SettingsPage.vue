@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { useBookmarkStore } from '../stores/bookmarks'
+import { useSettingsSummary } from '../composables/useSettingsSummary'
 
-const store = useBookmarkStore()
+const summary = useSettingsSummary()
 </script>
 
 <template>
@@ -16,15 +16,15 @@ const store = useBookmarkStore()
       <dl class="detail-list">
         <div>
           <dt>书签数量</dt>
-          <dd>{{ store.total }}</dd>
+          <dd>{{ summary.total.value }}</dd>
         </div>
         <div>
           <dt>分类数量</dt>
-          <dd>{{ store.folders.length }}</dd>
+          <dd>{{ summary.folderCount.value }}</dd>
         </div>
         <div>
           <dt>标签数量</dt>
-          <dd>{{ store.tags.length }}</dd>
+          <dd>{{ summary.tagCount.value }}</dd>
         </div>
       </dl>
     </section>

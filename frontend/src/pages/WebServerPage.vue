@@ -1,14 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useBookmarkStore } from '../stores/bookmarks'
+import { useServerWorkflow } from '../composables/useServerWorkflow'
 
-const store = useBookmarkStore()
-
-const serverPort = computed(() => {
-  if (!store.server.addr) return '默认'
-  const parts = store.server.addr.split(':')
-  return parts[parts.length - 1] || '默认'
-})
+const workflow = useServerWorkflow()
 </script>
 
 <template>
@@ -16,11 +9,11 @@ const serverPort = computed(() => {
     <section class="surface action-card tall">
       <div>
         <span class="eyebrow">Web Server</span>
-        <h2>{{ store.server.running ? '服务运行中' : '服务未启动' }}</h2>
-        <p>{{ store.server.running ? store.server.url : '启动后可在浏览器或局域网设备访问导出的书签页面。' }}</p>
+        <h2>{{ workflow.server.value.running ? '服务运行中' : '服务未启动' }}</h2>
+        <p>{{ workflow.serverDescription.value }}</p>
       </div>
-      <button class="primary-action" type="button" @click="store.toggleServer()">
-        {{ store.server.running ? '停止服务' : '启动服务' }}
+      <button class="primary-action" type="button" @click="workflow.toggleServer">
+        {{ workflow.server.value.running ? '停止服务' : '启动服务' }}
       </button>
     </section>
 
@@ -32,7 +25,7 @@ const serverPort = computed(() => {
         </div>
       </div>
       <div class="server-url-box">
-        <span>{{ store.server.running ? store.server.url : '启动服务后显示链接' }}</span>
+        <span>{{ workflow.accessLabel.value }}</span>
       </div>
       <div class="qr-placeholder">QR</div>
       <p class="hint">二维码占位已预留；当前后端未提供二维码生成接口，可后续接入前端生成。</p>
@@ -48,11 +41,11 @@ const serverPort = computed(() => {
       <dl class="detail-list">
         <div>
           <dt>端口</dt>
-          <dd>{{ serverPort }}</dd>
+          <dd>{{ workflow.serverPort.value }}</dd>
         </div>
         <div>
           <dt>地址</dt>
-          <dd>{{ store.server.addr || '未启动' }}</dd>
+          <dd>{{ workflow.server.value.addr || '未启动' }}</dd>
         </div>
       </dl>
     </section>
