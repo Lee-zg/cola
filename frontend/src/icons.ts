@@ -6,11 +6,14 @@ import {
   ArchiveOutline,
   BookmarksOutline,
   BrowsersOutline,
+  ChevronDownOutline,
+  ChevronForwardOutline,
   CloseOutline,
   CloudDownloadOutline,
   CloudUploadOutline,
   CopyOutline,
   DocumentTextOutline,
+  EllipsisHorizontalOutline,
   FolderOpenOutline,
   GlobeOutline,
   HomeOutline,
@@ -18,6 +21,8 @@ import {
   LinkOutline,
   MoonOutline,
   OpenOutline,
+  PencilOutline,
+  PinOutline,
   PlayForwardOutline,
   PricetagsOutline,
   RefreshOutline,
@@ -32,7 +37,9 @@ import {
   StatsChartOutline,
   StopOutline,
   SunnyOutline,
-  TrashOutline
+  TrashOutline,
+  ArrowDownOutline,
+  ArrowUpOutline
 } from '@vicons/ionicons5'
 
 export type AppIconKey =
@@ -40,10 +47,13 @@ export type AppIconKey =
   | 'ai'
   | 'backup'
   | 'bookmarks'
+  | 'chevronDown'
+  | 'chevronRight'
   | 'close'
   | 'copy'
   | 'dashboard'
   | 'document'
+  | 'dots'
   | 'export'
   | 'folder'
   | 'import'
@@ -53,6 +63,8 @@ export type AppIconKey =
   | 'minimise'
   | 'moon'
   | 'open'
+  | 'pencil'
+  | 'pin'
   | 'overflow'
   | 'refresh'
   | 'save'
@@ -64,6 +76,8 @@ export type AppIconKey =
   | 'sun'
   | 'tags'
   | 'trash'
+  | 'up'
+  | 'down'
   | 'web'
 
 export const appIcons: Record<AppIconKey, Component> = {
@@ -71,10 +85,14 @@ export const appIcons: Record<AppIconKey, Component> = {
   ai: SparklesOutline,
   backup: ArchiveOutline,
   bookmarks: BookmarksOutline,
+  chevronDown: ChevronDownOutline,
+  chevronRight: ChevronForwardOutline,
   close: CloseOutline,
   copy: CopyOutline,
   dashboard: HomeOutline,
   document: DocumentTextOutline,
+  dots: EllipsisHorizontalOutline,
+  down: ArrowDownOutline,
   export: CloudUploadOutline,
   folder: FolderOpenOutline,
   import: CloudDownloadOutline,
@@ -84,6 +102,8 @@ export const appIcons: Record<AppIconKey, Component> = {
   minimise: RemoveOutline,
   moon: MoonOutline,
   open: OpenOutline,
+  pencil: PencilOutline,
+  pin: PinOutline,
   overflow: PlayForwardOutline,
   refresh: RefreshOutline,
   save: SaveOutline,
@@ -95,6 +115,7 @@ export const appIcons: Record<AppIconKey, Component> = {
   sun: SunnyOutline,
   tags: PricetagsOutline,
   trash: TrashOutline,
+  up: ArrowUpOutline,
   web: GlobeOutline
 }
 

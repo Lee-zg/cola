@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"cola/internal/bookmark"
@@ -95,24 +96,28 @@ func parseChromiumBookmarks(path string) ([]bookmark.BookmarkInput, error) {
 
 // walkChromium 将 Chromium 的树状目录压平成书签列表，保留叶子节点所在的最近文件夹名。
 func walkChromium(node chromiumNode, folder string, items *[]bookmark.BookmarkInput) {
+	walkChromiumPath(node, []string{folder}, items)
+}
+
+func walkChromiumPath(node chromiumNode, path []string, items *[]bookmark.BookmarkInput) {
 	switch node.Type {
 	case "url":
 		*items = append(*items, bookmark.BookmarkInput{
 			Title:  node.Name,
 			URL:    node.URL,
-			Folder: folder,
+			Folder: strings.Join(cleanPath(path), " / "),
 		})
 	case "folder":
-		nextFolder := folder
+		nextPath := slices.Clone(path)
 		if node.Name != "" {
-			nextFolder = node.Name
+			nextPath = append(nextPath, node.Name)
 		}
 		for _, child := range node.Children {
-			walkChromium(child, nextFolder, items)
+			walkChromiumPath(child, nextPath, items)
 		}
 	default:
 		for _, child := range node.Children {
-			walkChromium(child, folder, items)
+			walkChromiumPath(child, path, items)
 		}
 	}
 }
@@ -203,6 +208,20 @@ func humanFolderName(root string) string {
 		}
 		return root
 	}
+}
+
+func cleanPath(path []string) []string {
+	out := make([]string, 0, len(path))
+	for _, part := range path {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	if len(out) == 0 {
+		return []string{bookmark.UncategorizedName}
+	}
+	return out
 }
 
 func fileExists(path string) bool {

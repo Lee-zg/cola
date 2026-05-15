@@ -14,6 +14,11 @@ const (
 	// DefaultLimit 和 MaxLimit 保护列表查询，避免桌面端一次性渲染或导出过大的分页结果。
 	DefaultLimit = 100
 	MaxLimit     = 500
+
+	RootCategoryID        = "category_all"
+	UncategorizedID       = "category_uncategorized"
+	UncategorizedName     = "未分类"
+	DefaultBrowserSetting = "default"
 )
 
 var allowedSchemes = map[string]struct{}{
@@ -28,6 +33,10 @@ type Bookmark struct {
 	URL            string     `json:"url"`
 	Description    string     `json:"description"`
 	Folder         string     `json:"folder"`
+	CategoryID     string     `json:"categoryId"`
+	CategoryName   string     `json:"categoryName"`
+	CategoryPath   []string   `json:"categoryPath"`
+	Preview        *Preview   `json:"preview,omitempty"`
 	Tags           []string   `json:"tags"`
 	Keywords       []string   `json:"keywords"`
 	Aliases        []string   `json:"aliases"`
@@ -43,18 +52,22 @@ type BookmarkInput struct {
 	URL         string   `json:"url"`
 	Description string   `json:"description"`
 	Folder      string   `json:"folder"`
+	CategoryID  string   `json:"categoryId"`
 	Tags        []string `json:"tags"`
 	Keywords    []string `json:"keywords"`
 	Aliases     []string `json:"aliases"`
 }
 
 type SearchRequest struct {
-	Query  string   `json:"query"`
-	Folder string   `json:"folder"`
-	Tags   []string `json:"tags"`
-	Limit  int      `json:"limit"`
-	Offset int      `json:"offset"`
-	Sort   string   `json:"sort"`
+	Query              string   `json:"query"`
+	Folder             string   `json:"folder"`
+	CategoryID         string   `json:"categoryId"`
+	IncludeDescendants bool     `json:"includeDescendants"`
+	ViewMode           string   `json:"viewMode"`
+	Tags               []string `json:"tags"`
+	Limit              int      `json:"limit"`
+	Offset             int      `json:"offset"`
+	Sort               string   `json:"sort"`
 }
 
 type SearchResult struct {
@@ -73,6 +86,56 @@ type ImportResult struct {
 	Imported int      `json:"imported"`
 	Skipped  int      `json:"skipped"`
 	Errors   []string `json:"errors"`
+}
+
+type CategoryNode struct {
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	ParentID  string         `json:"parentId"`
+	SortOrder int            `json:"sortOrder"`
+	IsSystem  bool           `json:"isSystem"`
+	Count     int            `json:"count"`
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
+	Children  []CategoryNode `json:"children"`
+}
+
+type CategoryInput struct {
+	Name     string `json:"name"`
+	ParentID string `json:"parentId"`
+}
+
+type MoveCategoryInput struct {
+	ParentID  string `json:"parentId"`
+	SortOrder int    `json:"sortOrder"`
+}
+
+type DeleteCategoryInput struct {
+	DeleteBookmarks bool `json:"deleteBookmarks"`
+}
+
+type Preview struct {
+	ID          string    `json:"id"`
+	BookmarkID  string    `json:"bookmarkId"`
+	Source      string    `json:"source"`
+	FilePath    string    `json:"filePath"`
+	ThumbPath   string    `json:"thumbPath"`
+	OriginalURL string    `json:"originalUrl"`
+	Mime        string    `json:"mime"`
+	Width       int       `json:"width"`
+	Height      int       `json:"height"`
+	Size        int64     `json:"size"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+type PreviewInput struct {
+	Source      string `json:"source"`
+	Path        string `json:"path"`
+	OriginalURL string `json:"originalUrl"`
+}
+
+type AppPreferences struct {
+	OpenBrowser string `json:"openBrowser"`
 }
 
 type ExportRequest struct {
@@ -116,6 +179,7 @@ func NormalizeInput(input BookmarkInput) (BookmarkInput, string, error) {
 	input.URL = strings.TrimSpace(input.URL)
 	input.Description = strings.TrimSpace(input.Description)
 	input.Folder = strings.TrimSpace(input.Folder)
+	input.CategoryID = strings.TrimSpace(input.CategoryID)
 	input.Tags = NormalizeList(input.Tags)
 	input.Keywords = NormalizeList(input.Keywords)
 	input.Aliases = NormalizeList(input.Aliases)
@@ -129,9 +193,33 @@ func NormalizeInput(input BookmarkInput) (BookmarkInput, string, error) {
 		input.Title = domain
 	}
 	if input.Folder == "" {
-		input.Folder = "Unsorted"
+		input.Folder = UncategorizedName
 	}
 	return input, domain, nil
+}
+
+func NormalizeCategoryInput(input CategoryInput) (CategoryInput, error) {
+	input.Name = strings.TrimSpace(input.Name)
+	input.ParentID = strings.TrimSpace(input.ParentID)
+	if input.Name == "" {
+		return CategoryInput{}, errors.New("category name is required")
+	}
+	if input.ParentID == RootCategoryID {
+		input.ParentID = ""
+	}
+	if input.ParentID == "" {
+		input.ParentID = RootCategoryID
+	}
+	return input, nil
+}
+
+func NormalizeBrowserSetting(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "chrome", "edge", "firefox":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return DefaultBrowserSetting
+	}
 }
 
 // NormalizeURL 接受用户省略 scheme 的输入，但只允许桌面书签目录需要展示的常见协议。
@@ -202,9 +290,23 @@ func MergeLists(base []string, additions ...[]string) []string {
 func NormalizeSearch(req SearchRequest) SearchRequest {
 	req.Query = strings.TrimSpace(req.Query)
 	req.Folder = strings.TrimSpace(req.Folder)
+	req.CategoryID = strings.TrimSpace(req.CategoryID)
+	if req.CategoryID == RootCategoryID {
+		req.CategoryID = ""
+	}
+	if req.ViewMode == "" {
+		req.ViewMode = "cards"
+	}
 	req.Tags = NormalizeList(req.Tags)
 	if req.Limit <= 0 {
-		req.Limit = DefaultLimit
+		switch req.ViewMode {
+		case "table":
+			req.Limit = 50
+		case "cards":
+			req.Limit = 24
+		default:
+			req.Limit = DefaultLimit
+		}
 	}
 	if req.Limit > MaxLimit {
 		req.Limit = MaxLimit

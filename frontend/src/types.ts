@@ -5,6 +5,10 @@ export interface Bookmark {
   url: string
   description: string
   folder: string
+  categoryId: string
+  categoryName: string
+  categoryPath: string[]
+  preview?: BookmarkPreview
   tags: string[]
   keywords: string[]
   aliases: string[]
@@ -19,6 +23,7 @@ export interface BookmarkInput {
   url: string
   description: string
   folder: string
+  categoryId: string
   tags: string[]
   keywords: string[]
   aliases: string[]
@@ -27,6 +32,9 @@ export interface BookmarkInput {
 export interface SearchRequest {
   query: string
   folder: string
+  categoryId: string
+  includeDescendants: boolean
+  viewMode: string
   tags: string[]
   limit: number
   offset: number
@@ -50,6 +58,56 @@ export interface ImportResult {
   imported: number
   skipped: number
   errors: string[]
+}
+
+export interface CategoryNode {
+  id: string
+  name: string
+  parentId: string
+  sortOrder: number
+  isSystem: boolean
+  count: number
+  createdAt: string
+  updatedAt: string
+  children: CategoryNode[]
+}
+
+export interface CategoryInput {
+  name: string
+  parentId: string
+}
+
+export interface MoveCategoryInput {
+  parentId: string
+  sortOrder: number
+}
+
+export interface DeleteCategoryInput {
+  deleteBookmarks: boolean
+}
+
+export interface BookmarkPreview {
+  id: string
+  bookmarkId: string
+  source: string
+  filePath: string
+  thumbPath: string
+  originalUrl: string
+  mime: string
+  width: number
+  height: number
+  size: number
+  createdAt: string
+}
+
+export interface PreviewInput {
+  source: string
+  path: string
+  originalUrl: string
+}
+
+export interface AppPreferences {
+  openBrowser: string
 }
 
 export interface ThemeManifest {

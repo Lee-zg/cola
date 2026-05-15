@@ -5,32 +5,41 @@ import (
 	"html"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 
 	"cola/internal/bookmark"
 )
 
 var (
-	linkRe   = regexp.MustCompile(`(?i)<a\s+([^>]*href\s*=\s*["'][^"']+["'][^>]*)>(.*?)</a>`)
+	tokenRe  = regexp.MustCompile(`(?is)</dl\s*>|<h3[^>]*>.*?</h3>|<a\s+[^>]*href\s*=\s*["'][^"']+["'][^>]*>.*?</a>`)
+	linkRe   = regexp.MustCompile(`(?is)<a\s+([^>]*href\s*=\s*["'][^"']+["'][^>]*)>(.*?)</a>`)
 	hrefRe   = regexp.MustCompile(`(?i)href\s*=\s*["']([^"']+)["']`)
-	folderRe = regexp.MustCompile(`(?i)<h3[^>]*>(.*?)</h3>`)
+	folderRe = regexp.MustCompile(`(?is)<h3[^>]*>(.*?)</h3>`)
 	tagRe    = regexp.MustCompile(`(?s)<[^>]+>`)
 )
 
-// ParseNetscapeHTML 按行解析常见导出格式；它不是通用 HTML 清洗器，后续字段校验交给 bookmark.NormalizeInput。
+// ParseNetscapeHTML 按标签顺序解析常见导出格式；它不是通用 HTML 清洗器，后续字段校验交给 bookmark.NormalizeInput。
 func ParseNetscapeHTML(data []byte) []bookmark.BookmarkInput {
-	lines := strings.Split(string(data), "\n")
-	currentFolder := "Unsorted"
+	folderStack := []string{bookmark.UncategorizedName}
 	var items []bookmark.BookmarkInput
-	for _, line := range lines {
-		if match := folderRe.FindStringSubmatch(line); len(match) == 2 {
-			currentFolder = cleanHTMLText(match[1])
-			if currentFolder == "" {
-				currentFolder = "Unsorted"
+	for _, token := range tokenRe.FindAllString(string(data), -1) {
+		lowerToken := strings.ToLower(token)
+		if strings.HasPrefix(lowerToken, "</dl") {
+			if len(folderStack) > 1 {
+				folderStack = folderStack[:len(folderStack)-1]
 			}
 			continue
 		}
-		match := linkRe.FindStringSubmatch(line)
+		if match := folderRe.FindStringSubmatch(token); len(match) == 2 {
+			folderName := cleanHTMLText(match[1])
+			if folderName == "" {
+				folderName = bookmark.UncategorizedName
+			}
+			folderStack = append(folderStack, folderName)
+			continue
+		}
+		match := linkRe.FindStringSubmatch(token)
 		if len(match) != 3 {
 			continue
 		}
@@ -45,7 +54,7 @@ func ParseNetscapeHTML(data []byte) []bookmark.BookmarkInput {
 		items = append(items, bookmark.BookmarkInput{
 			Title:  title,
 			URL:    html.UnescapeString(href[1]),
-			Folder: currentFolder,
+			Folder: strings.Join(cleanHTMLPath(folderStack), " / "),
 		})
 	}
 	return items
@@ -63,4 +72,19 @@ func cleanHTMLText(raw string) string {
 	raw = tagRe.ReplaceAllString(raw, "")
 	raw = html.UnescapeString(raw)
 	return strings.TrimSpace(raw)
+}
+
+func cleanHTMLPath(path []string) []string {
+	copied := slices.Clone(path)
+	out := make([]string, 0, len(copied))
+	for _, part := range copied {
+		part = strings.TrimSpace(part)
+		if part != "" && part != bookmark.UncategorizedName {
+			out = append(out, part)
+		}
+	}
+	if len(out) == 0 {
+		return []string{bookmark.UncategorizedName}
+	}
+	return out
 }

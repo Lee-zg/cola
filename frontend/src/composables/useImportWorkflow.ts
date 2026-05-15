@@ -23,6 +23,14 @@ export const useImportWorkflow = () => {
         message: store.status,
         time: new Date().toLocaleString()
       })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      store.setStatus(`导入失败：${message}`)
+      importHistory.value.unshift({
+        source: importSource.value,
+        message: store.status,
+        time: new Date().toLocaleString()
+      })
     } finally {
       importing.value = false
     }

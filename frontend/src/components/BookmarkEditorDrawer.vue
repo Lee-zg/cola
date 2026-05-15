@@ -1,14 +1,17 @@
 <!-- 文件说明：frontend/src/components/BookmarkEditorDrawer.vue，对应当前模块的界面或交互逻辑。 -->
 <script setup lang="ts">
-import { NButton, NDrawer, NDrawerContent, NDynamicTags, NForm, NFormItem, NIcon, NInput, NPopconfirm, NSpace, NTag } from 'naive-ui'
+import { computed, ref } from 'vue'
+import { NButton, NDrawer, NDrawerContent, NDynamicTags, NForm, NFormItem, NIcon, NInput, NPopconfirm, NSpace, NTag, NTreeSelect } from 'naive-ui'
+import type { TreeSelectOption } from 'naive-ui'
 import { appIcons } from '../icons'
-import type { Bookmark, BookmarkInput } from '../types'
+import type { Bookmark, BookmarkInput, CategoryNode } from '../types'
 
 const props = defineProps<{
   open: boolean
   selected: Bookmark | null
   draft: BookmarkInput
   status: string
+  categories: CategoryNode[]
 }>()
 
 const emit = defineEmits<{
@@ -16,10 +19,14 @@ const emit = defineEmits<{
   close: []
   remove: []
   save: []
+  'fetch-preview': []
+  'save-preview': [path: string]
   'update:draft': [patch: Partial<BookmarkInput>]
 }>()
 
-const updateTextField = (field: keyof Pick<BookmarkInput, 'title' | 'url' | 'description' | 'folder'>, value: string) => {
+const previewPath = ref('')
+
+const updateTextField = (field: keyof Pick<BookmarkInput, 'title' | 'url' | 'description' | 'folder' | 'categoryId'>, value: string) => {
   emit('update:draft', { [field]: value })
 }
 
@@ -27,8 +34,30 @@ const updateListField = (field: keyof Pick<BookmarkInput, 'tags' | 'keywords' | 
   emit('update:draft', { [field]: value })
 }
 
+const toCategoryTreeOption = (category: CategoryNode): TreeSelectOption => ({
+  key: category.id,
+  label: category.name,
+  disabled: category.id === 'category_all',
+  children: category.children.map(toCategoryTreeOption)
+})
+
+const categoryTreeOptions = computed(() => props.categories.map(toCategoryTreeOption))
+
+const handleCategoryChange = (value: string | number | Array<string | number> | null) => {
+  const nextValue = Array.isArray(value) ? value[0] : value
+  // 清空分类时回到系统“未分类”，避免把虚拟根写入书签。
+  updateTextField('categoryId', nextValue ? String(nextValue) : 'category_uncategorized')
+}
+
 const handleDrawerUpdate = (value: boolean) => {
   if (!value) emit('close')
+}
+
+const savePreview = () => {
+  const path = previewPath.value.trim()
+  if (!path) return
+  emit('save-preview', path)
+  previewPath.value = ''
 }
 </script>
 
@@ -77,11 +106,19 @@ const handleDrawerUpdate = (value: boolean) => {
         </NFormItem>
 
         <NFormItem label="分类">
-          <NInput :value="props.draft.folder" placeholder="例如 Work" @update:value="updateTextField('folder', $event)">
-            <template #prefix>
-              <NIcon :component="appIcons.folder" />
-            </template>
-          </NInput>
+          <NTreeSelect
+            clearable
+            default-expand-all
+            filterable
+            show-line
+            show-path
+            class="editor-category-tree-select"
+            :value="props.draft.categoryId || 'category_uncategorized'"
+            :options="categoryTreeOptions"
+            placeholder="选择书签分类"
+            separator=" / "
+            @update:value="handleCategoryChange"
+          />
         </NFormItem>
 
         <NFormItem label="标签">
@@ -94,6 +131,16 @@ const handleDrawerUpdate = (value: boolean) => {
 
         <NFormItem label="别名">
           <NDynamicTags :value="props.draft.aliases" @update:value="updateListField('aliases', $event)" />
+        </NFormItem>
+
+        <NFormItem label="预览图片">
+          <NSpace vertical :size="8" class="editor-preview-tools">
+            <NInput v-model:value="previewPath" placeholder="本地图片路径，例如 D:\\preview.png" />
+            <NSpace :size="8">
+              <NButton secondary :disabled="!props.selected" @click="savePreview">绑定本地图</NButton>
+              <NButton secondary :disabled="!props.selected" @click="emit('fetch-preview')">自动获取</NButton>
+            </NSpace>
+          </NSpace>
         </NFormItem>
 
         <div v-if="props.selected" class="editor-meta">

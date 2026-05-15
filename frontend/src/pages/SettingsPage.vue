@@ -2,16 +2,22 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { NAlert, NCard, NDescriptions, NDescriptionsItem, NIcon, NRadioButton, NRadioGroup, NSpace, NSwitch, NTag } from 'naive-ui'
+import { useBookmarkStore } from '../stores/bookmarks'
 import { useSettingsSummary } from '../composables/useSettingsSummary'
 import { useThemePreference } from '../composables/useThemePreference'
 import { appIcons } from '../icons'
 
 const summary = useSettingsSummary()
+const store = useBookmarkStore()
 const theme = useThemePreference()
 const runtimeFeatureLabel = computed(() => '前端 Runtime 适配已启用')
 
 const updateThemeMode = (value: string | number | boolean) => {
   theme.setThemeMode(value === 'dark' ? 'dark' : 'light')
+}
+
+const updateOpenBrowser = async (value: string | number | boolean) => {
+  await store.savePreferences({ openBrowser: String(value) })
 }
 </script>
 
@@ -63,10 +69,26 @@ const updateThemeMode = (value: string | number | boolean) => {
       <template #header>快捷键与桌面能力</template>
       <NDescriptions :column="1" bordered>
         <NDescriptionsItem label="全局搜索">Ctrl + K</NDescriptionsItem>
+        <NDescriptionsItem label="打开书签">按住 Ctrl 点击书签标题或卡片</NDescriptionsItem>
         <NDescriptionsItem label="窗口控制">{{ runtimeFeatureLabel }}</NDescriptionsItem>
         <NDescriptionsItem label="托盘能力">后续 Go/Wails 扩展</NDescriptionsItem>
       </NDescriptions>
       <NAlert class="settings-alert" type="info" :show-icon="false">Cola Bookmarks 是本地优先的桌面书签管理器。</NAlert>
+    </NCard>
+
+    <NCard class="settings-card" :bordered="false">
+      <template #header>浏览器打开方式</template>
+      <NSpace vertical :size="14">
+        <NRadioGroup :value="store.preferences.openBrowser" @update:value="updateOpenBrowser">
+          <NSpace>
+            <NRadioButton value="default">系统默认</NRadioButton>
+            <NRadioButton value="chrome">Chrome</NRadioButton>
+            <NRadioButton value="edge">Edge</NRadioButton>
+            <NRadioButton value="firefox">Firefox</NRadioButton>
+          </NSpace>
+        </NRadioGroup>
+        <NAlert type="info" :show-icon="false">找不到指定浏览器时会回退到系统默认浏览器。</NAlert>
+      </NSpace>
     </NCard>
   </section>
 </template>

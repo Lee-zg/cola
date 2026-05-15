@@ -17,7 +17,7 @@ func TestNormalizeInputDefaults(t *testing.T) {
 	if domain != "example.com" {
 		t.Fatalf("domain = %q", domain)
 	}
-	if input.Title != "example.com" || input.Folder != "Unsorted" {
+	if input.Title != "example.com" || input.Folder != UncategorizedName {
 		t.Fatalf("unexpected defaults: %#v", input)
 	}
 	if len(input.Tags) != 2 {

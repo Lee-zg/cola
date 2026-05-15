@@ -1,23 +1,26 @@
-<!-- 文件说明：frontend/src/pages/LibraryPage.vue，对应当前模块的界面或交互逻辑。 -->
+<!-- 文件说明：frontend/src/pages/LibraryPage.vue，书签库核心工作台，包含树形分类和多视图书签列表。 -->
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 import {
   NButton,
-  NCard,
   NEmpty,
   NIcon,
   NInput,
+  NPagination,
   NRadioButton,
   NRadioGroup,
   NSpace,
   NTag,
-  NThing
+  NTooltip
 } from 'naive-ui'
 import BookmarkEditorDrawer from '../components/BookmarkEditorDrawer.vue'
+import ColaLoader from '../components/ColaLoader.vue'
+import CategoryTree from '../components/CategoryTree.vue'
 import ColaScrollbar from '../components/ColaScrollbar.vue'
 import { useBookmarkLibrary } from '../composables/useBookmarkLibrary'
 import { useUiCommands } from '../composables/useUiCommands'
 import { appIcons } from '../icons'
+import type { Bookmark } from '../types'
 
 const library = useBookmarkLibrary()
 const uiCommands = useUiCommands()
@@ -33,68 +36,84 @@ watch(
 )
 
 const viewOptions = [
-  { label: '列表', value: 'list' },
+  { label: '表格', value: 'table' },
   { label: '卡片', value: 'cards' },
-  { label: '紧凑', value: 'compact' }
+  { label: '列表', value: 'list' }
 ]
 
-const folderOptions = computed(() => [''].concat(library.folders.value))
-const tagOptions = computed(() => [''].concat(library.tags.value))
+const page = computed({
+  get: () => Math.floor(library.offset.value / library.pageSize.value) + 1,
+  set: (value: number) => {
+    void library.setPage(value)
+  }
+})
+const pageCount = computed(() => Math.max(1, Math.ceil(library.total.value / library.pageSize.value)))
+const showPagination = computed(() => library.viewMode.value !== 'list' && library.total.value > library.pageSize.value)
+
+const getPreviewStyle = (item: Bookmark) => ({
+  backgroundImage: item.preview?.thumbPath || item.preview?.filePath ? `url("${item.preview.thumbPath || item.preview.filePath}")` : ''
+})
+
+const createCategory = async (name: string, parentId: string) => {
+  await library.createCategory(name, parentId)
+}
+
+const renameCategory = async (id: string, name: string) => {
+  await library.renameCategory(id, name)
+}
+
+const deleteCategory = async (id: string, deleteBookmarks: boolean) => {
+  await library.deleteCategory(id, deleteBookmarks)
+}
+
+const handleBookmarkClick = async (item: Bookmark, event: MouseEvent) => {
+  await library.openBookmark(item, event)
+}
+
+const handleListReachBottom = async () => {
+  if (library.viewMode.value === 'list') {
+    await library.loadMore()
+  }
+}
+
+const selectCategory = (id: string) => {
+  library.categoryId.value = id
+}
+
+const reorderCategory = async (id: string, direction: 'top' | 'up' | 'down') => {
+  await library.reorderCategory(id, direction)
+}
 </script>
 
 <template>
   <section class="page library-page">
-    <aside class="library-sidebar panel-surface">
-      <div class="panel-heading">
+    <aside class="library-sidebar category-sidebar panel-surface">
+      <div class="panel-heading category-heading">
         <div>
-          <span class="eyebrow">FILTERS</span>
-          <h2>筛选</h2>
+          <span class="eyebrow">CATEGORIES</span>
+          <h2>书签分类</h2>
         </div>
-        <NButton size="small" secondary :disabled="!library.activeFilters.value.length" @click="library.clearFilters">
-          清空
-        </NButton>
+        <NTooltip trigger="hover">
+          <template #trigger>
+            <NButton circle size="small" secondary aria-label="刷新分类" @click="library.clearFilters">
+              <template #icon>
+                <NIcon :component="appIcons.refresh" />
+              </template>
+            </NButton>
+          </template>
+          查看全部分类
+        </NTooltip>
       </div>
 
-      <section class="filter-block">
-        <h3>分类</h3>
-        <ColaScrollbar class="filter-scroll" aria-label="分类筛选滚动区" compact>
-          <button
-            v-for="folder in folderOptions"
-            :key="folder || 'all-folders'"
-            class="filter-chip"
-            :class="{ active: library.folder.value === folder }"
-            type="button"
-            @click="library.folder.value = folder"
-          >
-            <NIcon :component="appIcons.folder" />
-            <span>{{ folder || '全部分类' }}</span>
-          </button>
-        </ColaScrollbar>
-      </section>
-
-      <section class="filter-block">
-        <h3>标签</h3>
-        <ColaScrollbar class="filter-scroll" aria-label="标签筛选滚动区" compact>
-          <button
-            v-for="tag in tagOptions"
-            :key="tag || 'all-tags'"
-            class="filter-chip"
-            :class="{ active: library.tag.value === tag }"
-            type="button"
-            @click="library.tag.value = tag"
-          >
-            <NIcon :component="appIcons.tags" />
-            <span>{{ tag || '全部标签' }}</span>
-          </button>
-        </ColaScrollbar>
-      </section>
-
-      <NButton class="wide-action" type="primary" block @click="library.createBookmark">
-        <template #icon>
-          <NIcon :component="appIcons.add" />
-        </template>
-        新建书签
-      </NButton>
+      <CategoryTree
+        :categories="library.categories.value"
+        :selected-id="library.categoryId.value"
+        @create="createCategory"
+        @delete="deleteCategory"
+        @rename="renameCategory"
+        @reorder="reorderCategory"
+        @select="selectCategory"
+      />
     </aside>
 
     <main class="library-workspace panel-surface">
@@ -108,7 +127,7 @@ const tagOptions = computed(() => [''].concat(library.tags.value))
             class="library-inline-search"
             :value="library.query.value"
             clearable
-            placeholder="在书签库中搜索"
+            placeholder="标题、网址、描述、标签、关键词"
             @update:value="library.query.value = $event"
           >
             <template #prefix>
@@ -120,55 +139,139 @@ const tagOptions = computed(() => [''].concat(library.tags.value))
               {{ option.label }}
             </NRadioButton>
           </NRadioGroup>
+          <NButton type="primary" @click="library.createBookmark">
+            <template #icon>
+              <NIcon :component="appIcons.add" />
+            </template>
+            新建
+          </NButton>
         </NSpace>
       </div>
 
-      <ColaScrollbar class="library-scroll" aria-label="书签列表滚动区">
-        <div v-if="library.items.value.length" class="bookmark-list" :class="`mode-${library.viewMode.value}`">
-          <NCard
-            v-for="item in library.items.value"
-            :key="item.id"
-            class="bookmark-card"
-            :class="{ active: library.selectedId.value === item.id }"
-            :bordered="false"
-            size="small"
-            hoverable
-            @click="library.selectBookmark(item)"
-          >
-            <NThing>
-              <template #avatar>
-                <div class="bookmark-favicon">{{ (item.domain || item.title || '?').slice(0, 1).toUpperCase() }}</div>
-              </template>
-              <template #header>{{ item.title || item.url }}</template>
-              <template #description>
+      <ColaScrollbar class="library-scroll" aria-label="书签列表滚动区" @reach-bottom="handleListReachBottom">
+        <div class="library-list-stage" :class="{ 'is-loading': library.loading.value }">
+          <ColaLoader v-if="library.loading.value && library.loadingMode.value !== 'append' && !library.items.value.length" label="可乐正在翻找书签" />
+          <div v-else-if="library.items.value.length" class="bookmark-list" :class="`mode-${library.viewMode.value}`">
+            <table v-if="library.viewMode.value === 'table'" class="bookmark-table">
+              <thead>
+                <tr>
+                  <th>预览</th>
+                  <th>标题</th>
+                  <th>分类</th>
+                  <th>更新时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in library.items.value" :key="item.id" :class="{ active: library.selectedId.value === item.id }">
+                  <td>
+                    <div class="bookmark-preview small" :style="getPreviewStyle(item)">
+                      <span v-if="!item.preview">{{ (item.domain || item.title || '?').slice(0, 1).toUpperCase() }}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <button
+                      class="bookmark-title-link"
+                      type="button"
+                      title="按住 Ctrl 点击打开，普通点击编辑"
+                      @click="handleBookmarkClick(item, $event)"
+                    >
+                      {{ item.title || item.url }}
+                    </button>
+                    <span class="bookmark-url">{{ item.domain || item.url }}</span>
+                  </td>
+                  <td>{{ item.categoryPath?.join(' / ') || item.folder }}</td>
+                  <td>{{ item.updatedAt }}</td>
+                  <td>
+                    <NSpace :size="6">
+                      <NButton size="small" secondary @click="library.selectBookmark(item)">编辑</NButton>
+                      <NButton size="small" secondary @click="library.fetchPreview(item.id)">预览</NButton>
+                    </NSpace>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <article
+              v-for="item in library.viewMode.value === 'cards' ? library.items.value : []"
+              :key="item.id"
+              class="bookmark-card-pro"
+              :class="{ active: library.selectedId.value === item.id }"
+              @click="handleBookmarkClick(item, $event)"
+            >
+              <div class="bookmark-preview" :style="getPreviewStyle(item)">
+                <span v-if="!item.preview">{{ (item.domain || item.title || '?').slice(0, 1).toUpperCase() }}</span>
+                <button class="preview-action" type="button" @click.stop="library.fetchPreview(item.id)">获取预览</button>
+              </div>
+              <div class="bookmark-card-body">
+                <div class="bookmark-card-title">
+                  <strong>{{ item.title || item.url }}</strong>
+                  <span class="open-hint">
+                    <NIcon :component="appIcons.open" />
+                    Ctrl 打开
+                  </span>
+                </div>
                 <span class="bookmark-url">{{ item.url }}</span>
-              </template>
-              <template #footer>
+                <p>{{ item.description || item.domain || '暂无描述' }}</p>
                 <NSpace :size="6" align="center" wrap>
-                  <NTag size="small" round>{{ item.folder || 'Unsorted' }}</NTag>
-                  <NTag v-for="tag in item.tags" :key="tag" size="small" round type="info">{{ tag }}</NTag>
+                  <NTag size="small" round>{{ item.categoryPath?.join(' / ') || item.folder }}</NTag>
+                  <NTag v-for="tag in item.tags.slice(0, 3)" :key="tag" size="small" round type="info">{{ tag }}</NTag>
                 </NSpace>
-              </template>
-            </NThing>
-          </NCard>
+              </div>
+            </article>
+
+            <div v-if="library.viewMode.value === 'list'" class="bookmark-stream">
+              <article
+                v-for="item in library.items.value"
+                :key="item.id"
+                class="bookmark-row"
+                :class="{ active: library.selectedId.value === item.id }"
+                @click="handleBookmarkClick(item, $event)"
+              >
+                <div class="bookmark-preview small" :style="getPreviewStyle(item)">
+                  <span v-if="!item.preview">{{ (item.domain || item.title || '?').slice(0, 1).toUpperCase() }}</span>
+                </div>
+                <div>
+                  <strong>{{ item.title || item.url }}</strong>
+                  <span class="bookmark-url">{{ item.url }}</span>
+                  <p>{{ item.description || item.categoryPath?.join(' / ') || item.folder }}</p>
+                </div>
+              </article>
+              <NButton v-if="library.loadedCount.value < library.total.value" secondary block :loading="library.loading.value" @click="library.loadMore">
+                加载更多（{{ library.loadedCount.value }} / {{ library.total.value }}）
+              </NButton>
+            </div>
+          </div>
+          <NEmpty v-else class="page-empty" description="没有匹配的书签">
+            <template #extra>
+              <NButton type="primary" @click="library.createBookmark">新增第一个书签</NButton>
+            </template>
+          </NEmpty>
+          <Transition name="cola-loader-pop">
+            <div v-if="library.loading.value && library.loadingMode.value !== 'append' && library.items.value.length" class="library-loading-overlay">
+              <ColaLoader label="正在刷新书签列表" />
+            </div>
+          </Transition>
         </div>
-        <NEmpty v-else class="page-empty" description="没有匹配的书签">
-          <template #extra>
-            <NButton type="primary" @click="library.createBookmark">新增第一个书签</NButton>
-          </template>
-        </NEmpty>
       </ColaScrollbar>
+
+      <div v-if="showPagination" class="library-pagination">
+        <NPagination v-model:page="page" :page-count="pageCount" :page-slot="7" />
+      </div>
     </main>
 
     <BookmarkEditorDrawer
+      :categories="library.categories.value"
       :draft="library.draft.value"
       :open="library.editorOpen.value"
       :selected="library.selected.value"
       :status="library.status.value"
       @analyze="library.analyzeSelected"
       @close="library.closeEditor"
+      @fetch-preview="library.fetchPreview()"
       @remove="library.removeSelected"
       @save="library.save"
+      @save-preview="library.savePreview"
       @update:draft="library.updateDraft"
     />
   </section>

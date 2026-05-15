@@ -15,6 +15,11 @@ const props = withDefaults(
   }
 )
 
+const emit = defineEmits<{
+  'reach-bottom': []
+  scroll: [payload: { clientHeight: number; progress: number; scrollHeight: number; scrollTop: number }]
+}>()
+
 const viewportRef = ref<HTMLElement | null>(null)
 const trackRef = ref<HTMLElement | null>(null)
 const thumbHeight = ref(40)
@@ -102,8 +107,22 @@ const observeContent = () => {
 }
 
 const handleScroll = () => {
+  const viewport = viewportRef.value
   markScrolling()
   updateMetrics()
+  if (!viewport) return
+
+  const scrollRange = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
+  const progress = scrollRange ? viewport.scrollTop / scrollRange : 0
+  emit('scroll', {
+    clientHeight: viewport.clientHeight,
+    progress,
+    scrollHeight: viewport.scrollHeight,
+    scrollTop: viewport.scrollTop
+  })
+  if (scrollRange > 0 && viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 96) {
+    emit('reach-bottom')
+  }
 }
 
 const handlePointerMove = (event: PointerEvent) => {

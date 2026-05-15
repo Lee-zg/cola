@@ -12,6 +12,7 @@ import (
 	"cola/internal/ai"
 	"cola/internal/backup"
 	"cola/internal/bookmark"
+	appbrowser "cola/internal/browser"
 	"cola/internal/exporter"
 	"cola/internal/importer"
 	"cola/internal/storage"
@@ -112,6 +113,48 @@ func (a *App) ListTags() ([]string, error) {
 	return a.store.ListTags(a.context())
 }
 
+func (a *App) ListCategories() ([]bookmark.CategoryNode, error) {
+	if err := a.ensureReady(a.context()); err != nil {
+		return nil, err
+	}
+	return a.store.ListCategories(a.context())
+}
+
+func (a *App) CreateCategory(input bookmark.CategoryInput) (bookmark.CategoryNode, error) {
+	if err := a.ensureReady(a.context()); err != nil {
+		return bookmark.CategoryNode{}, err
+	}
+	return a.store.CreateCategory(a.context(), input)
+}
+
+func (a *App) UpdateCategory(id string, input bookmark.CategoryInput) (bookmark.CategoryNode, error) {
+	if err := a.ensureReady(a.context()); err != nil {
+		return bookmark.CategoryNode{}, err
+	}
+	return a.store.UpdateCategory(a.context(), id, input)
+}
+
+func (a *App) MoveCategory(id string, input bookmark.MoveCategoryInput) (bookmark.CategoryNode, error) {
+	if err := a.ensureReady(a.context()); err != nil {
+		return bookmark.CategoryNode{}, err
+	}
+	return a.store.MoveCategory(a.context(), id, input)
+}
+
+func (a *App) DeleteCategory(id string) error {
+	if err := a.ensureReady(a.context()); err != nil {
+		return err
+	}
+	return a.store.DeleteCategory(a.context(), id)
+}
+
+func (a *App) DeleteCategoryWithOptions(id string, input bookmark.DeleteCategoryInput) error {
+	if err := a.ensureReady(a.context()); err != nil {
+		return err
+	}
+	return a.store.DeleteCategoryWithOptions(a.context(), id, input)
+}
+
 func (a *App) ImportBookmarks(req bookmark.ImportRequest) (bookmark.ImportResult, error) {
 	if err := a.ensureReady(a.context()); err != nil {
 		return bookmark.ImportResult{}, err
@@ -185,11 +228,65 @@ func (a *App) AnalyzeAllBookmarks() (int, error) {
 	return count, nil
 }
 
+func (a *App) SaveBookmarkPreview(id string, input bookmark.PreviewInput) (bookmark.Preview, error) {
+	if err := a.ensureReady(a.context()); err != nil {
+		return bookmark.Preview{}, err
+	}
+	return a.store.SaveBookmarkPreview(a.context(), id, input)
+}
+
+func (a *App) FetchBookmarkPreview(id string) (bookmark.Preview, error) {
+	if err := a.ensureReady(a.context()); err != nil {
+		return bookmark.Preview{}, err
+	}
+	return a.store.FetchBookmarkPreview(a.context(), id)
+}
+
+func (a *App) GetPreferences() (bookmark.AppPreferences, error) {
+	if err := a.ensureReady(a.context()); err != nil {
+		return bookmark.AppPreferences{}, err
+	}
+	return a.store.GetPreferences(a.context())
+}
+
+func (a *App) SavePreferences(prefs bookmark.AppPreferences) (bookmark.AppPreferences, error) {
+	if err := a.ensureReady(a.context()); err != nil {
+		return bookmark.AppPreferences{}, err
+	}
+	return a.store.SavePreferences(a.context(), prefs)
+}
+
+func (a *App) OpenBookmark(id string) error {
+	if err := a.ensureReady(a.context()); err != nil {
+		return err
+	}
+	item, err := a.store.GetBookmark(a.context(), id)
+	if err != nil {
+		return err
+	}
+	prefs, err := a.store.GetPreferences(a.context())
+	if err != nil {
+		return err
+	}
+	return appbrowser.OpenURL(item.URL, prefs.OpenBrowser)
+}
+
+func (a *App) OpenURL(rawURL string) error {
+	if err := a.ensureReady(a.context()); err != nil {
+		return err
+	}
+	prefs, err := a.store.GetPreferences(a.context())
+	if err != nil {
+		return err
+	}
+	return appbrowser.OpenURL(rawURL, prefs.OpenBrowser)
+}
+
 func (a *App) CreateBackup(path string) (bookmark.BackupResult, error) {
 	if err := a.ensureReady(a.context()); err != nil {
 		return bookmark.BackupResult{}, err
 	}
-	backupPath, err := backup.Create(a.store.DBPath(), path)
+	backupPath, err := backup.CreateWithAssets(a.store.DBPath(), filepath.Join(a.dataDir, "previews"), path)
 	if err != nil {
 		return bookmark.BackupResult{}, err
 	}
@@ -209,7 +306,7 @@ func (a *App) RestoreBackup(path string) (bookmark.BackupResult, error) {
 	if err := a.store.Close(); err != nil {
 		return bookmark.BackupResult{}, err
 	}
-	snapshot, err := backup.Restore(a.dbPath, path)
+	snapshot, err := backup.RestoreWithAssets(a.dbPath, filepath.Join(a.dataDir, "previews"), path)
 	if err != nil {
 		// 恢复失败时尽量回到可用状态，让前端仍能继续读取原数据库或展示明确错误。
 		reopened, openErr := storage.Open(a.context(), a.dbPath)

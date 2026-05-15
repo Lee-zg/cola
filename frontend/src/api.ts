@@ -1,8 +1,15 @@
 // api 模块是前端访问 Wails 后端的唯一边界，页面和 store 不直接读取 window.go。
 import type {
+  AppPreferences,
   Bookmark,
   BookmarkInput,
+  BookmarkPreview,
+  CategoryInput,
+  CategoryNode,
+  DeleteCategoryInput,
   ImportResult,
+  MoveCategoryInput,
+  PreviewInput,
   SearchRequest,
   SearchResult,
   ServerStatus,
@@ -15,7 +22,19 @@ type Backend = {
   DeleteBookmark(id: string): Promise<void>
   ListBookmarks(req: SearchRequest): Promise<SearchResult>
   ListFolders(): Promise<string[]>
+  ListCategories(): Promise<CategoryNode[]>
+  CreateCategory(input: CategoryInput): Promise<CategoryNode>
+  UpdateCategory(id: string, input: CategoryInput): Promise<CategoryNode>
+  MoveCategory(id: string, input: MoveCategoryInput): Promise<CategoryNode>
+  DeleteCategory(id: string): Promise<void>
+  DeleteCategoryWithOptions(id: string, input: DeleteCategoryInput): Promise<void>
   ListTags(): Promise<string[]>
+  SaveBookmarkPreview(id: string, input: PreviewInput): Promise<BookmarkPreview>
+  FetchBookmarkPreview(id: string): Promise<BookmarkPreview>
+  GetPreferences(): Promise<AppPreferences>
+  SavePreferences(prefs: AppPreferences): Promise<AppPreferences>
+  OpenBookmark(id: string): Promise<void>
+  OpenURL(url: string): Promise<void>
   ImportBookmarks(req: { sourceType: string; path: string }): Promise<ImportResult>
   ExportBookmarks(req: { path: string; templateId: string }): Promise<string>
   AnalyzeBookmark(id: string): Promise<Bookmark>
@@ -50,7 +69,19 @@ export const api = {
   deleteBookmark: (id: string) => backend().DeleteBookmark(id),
   listBookmarks: (req: SearchRequest) => backend().ListBookmarks(req),
   listFolders: () => backend().ListFolders(),
+  listCategories: () => backend().ListCategories(),
+  createCategory: (input: CategoryInput) => backend().CreateCategory(input),
+  updateCategory: (id: string, input: CategoryInput) => backend().UpdateCategory(id, input),
+  moveCategory: (id: string, input: MoveCategoryInput) => backend().MoveCategory(id, input),
+  deleteCategory: (id: string) => backend().DeleteCategory(id),
+  deleteCategoryWithOptions: (id: string, input: DeleteCategoryInput) => backend().DeleteCategoryWithOptions(id, input),
   listTags: () => backend().ListTags(),
+  saveBookmarkPreview: (id: string, input: PreviewInput) => backend().SaveBookmarkPreview(id, input),
+  fetchBookmarkPreview: (id: string) => backend().FetchBookmarkPreview(id),
+  getPreferences: () => backend().GetPreferences(),
+  savePreferences: (prefs: AppPreferences) => backend().SavePreferences(prefs),
+  openBookmark: (id: string) => backend().OpenBookmark(id),
+  openUrl: (url: string) => backend().OpenURL(url),
   importBookmarks: (sourceType: string, path: string) => backend().ImportBookmarks({ sourceType, path }),
   exportBookmarks: (path: string, templateId: string) => backend().ExportBookmarks({ path, templateId }),
   analyzeBookmark: (id: string) => backend().AnalyzeBookmark(id),

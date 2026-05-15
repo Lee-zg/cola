@@ -5,7 +5,8 @@ export const blankBookmarkInput = () => ({
   title: '',
   url: '',
   description: '',
-  folder: 'Unsorted',
+  folder: '未分类',
+  categoryId: 'category_uncategorized',
   tags: [],
   keywords: [],
   aliases: []
@@ -25,6 +26,7 @@ export const toBookmarkInput = (bookmark: Bookmark) => ({
   url: bookmark.url,
   description: bookmark.description,
   folder: bookmark.folder,
+  categoryId: bookmark.categoryId || 'category_uncategorized',
   tags: [...bookmark.tags],
   keywords: [...bookmark.keywords],
   aliases: [...bookmark.aliases]

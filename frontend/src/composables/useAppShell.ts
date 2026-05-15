@@ -16,10 +16,17 @@ export const useAppShell = () => {
   })
 
   let searchTimer = 0
+  let lastListState = [store.query, store.folder, store.categoryId, store.tag, store.viewMode].join('\u0000')
 
   watch(
-    () => [store.query, store.folder, store.tag],
-    () => {
+    () => [store.query, store.folder, store.categoryId, store.tag, store.viewMode],
+    (state) => {
+      const nextListState = state.join('\u0000')
+      if (nextListState !== lastListState) {
+        store.offset = 0
+        store.loadedCount = 0
+        lastListState = nextListState
+      }
       window.clearTimeout(searchTimer)
       searchTimer = window.setTimeout(() => store.refresh(), 220)
     }
