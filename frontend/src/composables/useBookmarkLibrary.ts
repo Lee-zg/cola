@@ -1,7 +1,7 @@
 // useBookmarkLibrary 封装书签库页面的筛选、视图模式和编辑抽屉状态。
 import { computed, ref } from 'vue'
 import { type CategoryReorderDirection, type LibraryViewMode, useBookmarkStore } from '../stores/bookmarks'
-import type { Bookmark, BookmarkInput } from '../types'
+import type { Bookmark, BookmarkInput, ThumbnailUploadInput } from '../types'
 
 export type BookmarkViewMode = LibraryViewMode
 
@@ -81,7 +81,7 @@ export const useBookmarkLibrary = () => {
   }
 
   const save = async () => {
-    await store.save()
+    await store.save(closeEditor)
   }
 
   const loadMore = async () => {
@@ -112,12 +112,24 @@ export const useBookmarkLibrary = () => {
     await store.reorderCategory(id, direction)
   }
 
-  const savePreview = async (path: string) => {
-    await store.savePreview(path)
+  const saveCustomThumbnail = async (input: ThumbnailUploadInput) => {
+    await store.saveCustomThumbnail(input)
   }
 
-  const fetchPreview = async (id?: string) => {
-    await store.fetchPreview(id)
+  const saveCustomThumbnailUrl = async (url: string) => {
+    await store.saveCustomThumbnailUrl(url)
+  }
+
+  const setThumbnailAutoMode = async (useAuto: boolean) => {
+    await store.setThumbnailAutoMode(useAuto)
+  }
+
+  const clearCustomThumbnail = async () => {
+    await store.clearCustomThumbnail()
+  }
+
+  const refreshAutoThumbnail = async (id?: string) => {
+    await store.refreshAutoThumbnail(id)
   }
 
   const removeSelected = async () => {
@@ -164,8 +176,11 @@ export const useBookmarkLibrary = () => {
     moveCategory,
     deleteCategory,
     reorderCategory,
-    savePreview,
-    fetchPreview,
+    saveCustomThumbnail,
+    saveCustomThumbnailUrl,
+    setThumbnailAutoMode,
+    clearCustomThumbnail,
+    refreshAutoThumbnail,
     save,
     removeSelected,
     analyzeSelected

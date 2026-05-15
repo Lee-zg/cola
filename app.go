@@ -242,6 +242,48 @@ func (a *App) FetchBookmarkPreview(id string) (bookmark.Preview, error) {
 	return a.store.FetchBookmarkPreview(a.context(), id)
 }
 
+func (a *App) SaveCustomThumbnail(id string, input bookmark.ThumbnailUploadInput) (bookmark.Thumbnail, error) {
+	if err := a.ensureReady(a.context()); err != nil {
+		return bookmark.Thumbnail{}, err
+	}
+	return a.store.SaveCustomThumbnail(a.context(), id, input)
+}
+
+func (a *App) SaveCustomThumbnailUrl(id string, input bookmark.ThumbnailURLInput) (bookmark.Thumbnail, error) {
+	if err := a.ensureReady(a.context()); err != nil {
+		return bookmark.Thumbnail{}, err
+	}
+	return a.store.SaveCustomThumbnailURL(a.context(), id, input)
+}
+
+func (a *App) SetThumbnailAutoMode(id string, input bookmark.ThumbnailModeInput) (bookmark.Thumbnail, error) {
+	if err := a.ensureReady(a.context()); err != nil {
+		return bookmark.Thumbnail{}, err
+	}
+	return a.store.SetThumbnailAutoMode(a.context(), id, input)
+}
+
+func (a *App) ClearCustomThumbnail(id string) (bookmark.Thumbnail, error) {
+	if err := a.ensureReady(a.context()); err != nil {
+		return bookmark.Thumbnail{}, err
+	}
+	return a.store.ClearCustomThumbnail(a.context(), id)
+}
+
+func (a *App) RefreshAutoThumbnail(id string) (bookmark.Thumbnail, error) {
+	if err := a.ensureReady(a.context()); err != nil {
+		return bookmark.Thumbnail{}, err
+	}
+	return a.store.RefreshAutoThumbnail(a.context(), id)
+}
+
+func (a *App) EnsureAutoThumbnail(id string) (bookmark.Thumbnail, error) {
+	if err := a.ensureReady(a.context()); err != nil {
+		return bookmark.Thumbnail{}, err
+	}
+	return a.store.EnsureAutoThumbnail(a.context(), id)
+}
+
 func (a *App) GetPreferences() (bookmark.AppPreferences, error) {
 	if err := a.ensureReady(a.context()); err != nil {
 		return bookmark.AppPreferences{}, err

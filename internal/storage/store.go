@@ -3,7 +3,6 @@ package storage
 
 import (
 	"context"
-	"crypto/sha1"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -135,6 +134,14 @@ func (s *Store) init(ctx context.Context) error {
 		}
 	}
 	if err := s.ensureColumn(ctx, "bookmarks", "category_id", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	for _, column := range thumbnailColumns {
+		if err := s.ensureColumn(ctx, "bookmark_previews", column.name, column.definition); err != nil {
+			return err
+		}
+	}
+	if err := s.migrateLegacyPreviewRows(ctx); err != nil {
 		return err
 	}
 	if _, err := s.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_bookmarks_category ON bookmarks(category_id);`); err != nil {
@@ -739,7 +746,7 @@ func (s *Store) DeleteCategoryWithOptions(ctx context.Context, id string, input 
 		args = append(args, categoryID)
 	}
 	if input.DeleteBookmarks {
-		// 勾选删除书签时先清理书签，预览图记录由外键级联删除。
+		// 勾选删除书签时先清理书签，缩略图记录由外键级联删除。
 		if _, err = tx.ExecContext(ctx, `DELETE FROM bookmarks WHERE category_id IN (`+strings.Join(placeholders, ",")+`)`, args...); err != nil {
 			return err
 		}
@@ -792,141 +799,62 @@ func (s *Store) GetSetting(ctx context.Context, key string) (string, error) {
 }
 
 func (s *Store) GetPreferences(ctx context.Context) (bookmark.AppPreferences, error) {
-	value, err := s.GetSetting(ctx, "open_browser")
+	openBrowser, err := s.GetSetting(ctx, "open_browser")
 	if err != nil {
 		return bookmark.AppPreferences{}, err
 	}
-	return bookmark.AppPreferences{OpenBrowser: bookmark.NormalizeBrowserSetting(value)}, nil
+	lazyFetch, err := s.GetSetting(ctx, "lazy_fetch_thumbnails")
+	if err != nil {
+		return bookmark.AppPreferences{}, err
+	}
+	return bookmark.AppPreferences{
+		OpenBrowser:         bookmark.NormalizeBrowserSetting(openBrowser),
+		LazyFetchThumbnails: lazyFetch != "false",
+	}, nil
 }
 
 func (s *Store) SavePreferences(ctx context.Context, prefs bookmark.AppPreferences) (bookmark.AppPreferences, error) {
-	normalized := bookmark.AppPreferences{OpenBrowser: bookmark.NormalizeBrowserSetting(prefs.OpenBrowser)}
+	normalized := bookmark.AppPreferences{
+		OpenBrowser:         bookmark.NormalizeBrowserSetting(prefs.OpenBrowser),
+		LazyFetchThumbnails: prefs.LazyFetchThumbnails,
+	}
 	if err := s.SetSetting(ctx, "open_browser", normalized.OpenBrowser); err != nil {
+		return bookmark.AppPreferences{}, err
+	}
+	if err := s.SetSetting(ctx, "lazy_fetch_thumbnails", fmt.Sprintf("%t", normalized.LazyFetchThumbnails)); err != nil {
 		return bookmark.AppPreferences{}, err
 	}
 	return normalized, nil
 }
 
-// PreviewFileServer 只暴露 previews 目录，前端用相对 URL 展示数据库中保存的本地预览图。
+// PreviewFileServer 只暴露 previews 目录，前端用相对 URL 展示数据库中保存的本地缩略图。
 func (s *Store) PreviewFileServer() http.Handler {
 	return http.StripPrefix("/previews/", http.FileServer(http.Dir(filepath.Join(s.dataDir, "previews"))))
 }
 
 func (s *Store) SaveBookmarkPreview(ctx context.Context, bookmarkID string, input bookmark.PreviewInput) (bookmark.Preview, error) {
-	if _, err := s.GetBookmark(ctx, bookmarkID); err != nil {
-		return bookmark.Preview{}, err
-	}
-	input.Source = strings.TrimSpace(input.Source)
-	if input.Source == "" {
-		input.Source = "manual"
-	}
 	sourcePath := strings.TrimSpace(input.Path)
-	if sourcePath == "" {
-		return bookmark.Preview{}, errors.New("preview path is required")
-	}
-	stat, err := os.Stat(sourcePath)
+	data, err := os.ReadFile(sourcePath)
 	if err != nil {
 		return bookmark.Preview{}, err
 	}
-	if stat.IsDir() {
-		return bookmark.Preview{}, errors.New("preview path must be a file")
-	}
-	file, err := os.Open(sourcePath)
+	thumbnail, err := s.SaveCustomThumbnail(ctx, bookmarkID, bookmark.ThumbnailUploadInput{
+		FileName: filepath.Base(sourcePath),
+		Mime:     mime.TypeByExtension(strings.ToLower(filepath.Ext(sourcePath))),
+		Data:     dataURLFromBytes(data),
+	})
 	if err != nil {
 		return bookmark.Preview{}, err
 	}
-	defer file.Close()
-	hash := sha1.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return bookmark.Preview{}, err
-	}
-	hashName := fmt.Sprintf("%x", hash.Sum(nil))
-	ext := strings.ToLower(filepath.Ext(sourcePath))
-	if ext == "" {
-		ext = ".img"
-	}
-	relativePath := filepath.ToSlash(filepath.Join("previews", "original", hashName+ext))
-	targetPath := filepath.Join(s.dataDir, filepath.FromSlash(relativePath))
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-		return bookmark.Preview{}, err
-	}
-	if err := copyLocalFile(sourcePath, targetPath); err != nil {
-		return bookmark.Preview{}, err
-	}
-	mimeType := mime.TypeByExtension(ext)
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
-	preview := bookmark.Preview{
-		ID:          newID("preview"),
-		BookmarkID:  bookmarkID,
-		Source:      input.Source,
-		FilePath:    relativePath,
-		ThumbPath:   relativePath,
-		OriginalURL: strings.TrimSpace(input.OriginalURL),
-		Mime:        mimeType,
-		Size:        stat.Size(),
-		CreatedAt:   time.Now().UTC(),
-	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO bookmark_previews
-		(id, bookmark_id, source, file_path, thumb_path, original_url, mime, width, height, size, created_at)
-		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(bookmark_id) DO UPDATE SET
-			id = excluded.id,
-			source = excluded.source,
-			file_path = excluded.file_path,
-			thumb_path = excluded.thumb_path,
-			original_url = excluded.original_url,
-			mime = excluded.mime,
-			width = excluded.width,
-			height = excluded.height,
-			size = excluded.size,
-			created_at = excluded.created_at`,
-		preview.ID, preview.BookmarkID, preview.Source, preview.FilePath, preview.ThumbPath, preview.OriginalURL,
-		preview.Mime, preview.Width, preview.Height, preview.Size, formatTime(preview.CreatedAt))
-	if err != nil {
-		return bookmark.Preview{}, err
-	}
-	preview.FilePath = previewAssetURL(preview.FilePath)
-	preview.ThumbPath = previewAssetURL(preview.ThumbPath)
-	return preview, nil
+	return previewFromThumbnail(thumbnail), nil
 }
 
 func (s *Store) FetchBookmarkPreview(ctx context.Context, bookmarkID string) (bookmark.Preview, error) {
-	item, err := s.GetBookmark(ctx, bookmarkID)
+	thumbnail, err := s.RefreshAutoThumbnail(ctx, bookmarkID)
 	if err != nil {
 		return bookmark.Preview{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, item.URL, nil)
-	if err != nil {
-		return bookmark.Preview{}, err
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return bookmark.Preview{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return bookmark.Preview{}, fmt.Errorf("preview page status %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-	if err != nil {
-		return bookmark.Preview{}, err
-	}
-	previewURL := extractOpenGraphImage(string(body))
-	if previewURL == "" {
-		return bookmark.Preview{}, errors.New("preview image not found")
-	}
-	resolvedURL, err := resolveURL(item.URL, previewURL)
-	if err != nil {
-		return bookmark.Preview{}, err
-	}
-	sourcePath, cleanup, err := s.downloadPreviewImage(ctx, resolvedURL)
-	if err != nil {
-		return bookmark.Preview{}, err
-	}
-	defer cleanup()
-	return s.SaveBookmarkPreview(ctx, bookmarkID, bookmark.PreviewInput{Source: "auto", Path: sourcePath, OriginalURL: resolvedURL})
+	return previewFromThumbnail(thumbnail), nil
 }
 
 type bookmarkScanner interface {
@@ -1002,6 +930,15 @@ func (s *Store) decorateBookmark(ctx context.Context, item *bookmark.Bookmark) e
 	if item.Preview != nil {
 		item.Preview.FilePath = previewAssetURL(item.Preview.FilePath)
 		item.Preview.ThumbPath = previewAssetURL(item.Preview.ThumbPath)
+	}
+	thumbnail, err := s.loadThumbnail(ctx, item.ID)
+	if err != nil {
+		return err
+	}
+	item.Thumbnail = thumbnail
+	if thumbnail != nil {
+		preview := previewFromThumbnail(*thumbnail)
+		item.Preview = &preview
 	}
 	return nil
 }
@@ -1454,38 +1391,4 @@ func resolveURL(baseURL, rawURL string) (string, error) {
 		return "", err
 	}
 	return parsedBase.ResolveReference(parsedRaw).String(), nil
-}
-
-func (s *Store) downloadPreviewImage(ctx context.Context, imageURL string) (string, func(), error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imageURL, nil)
-	if err != nil {
-		return "", func() {}, err
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", func() {}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", func() {}, fmt.Errorf("preview image status %d", resp.StatusCode)
-	}
-	ext := ".img"
-	if contentType := resp.Header.Get("Content-Type"); contentType != "" {
-		if exts, _ := mime.ExtensionsByType(strings.Split(contentType, ";")[0]); len(exts) > 0 {
-			ext = exts[0]
-		}
-	}
-	tempFile, err := os.CreateTemp(s.dataDir, "preview-*"+ext)
-	if err != nil {
-		return "", func() {}, err
-	}
-	cleanup := func() {
-		_ = os.Remove(tempFile.Name())
-	}
-	defer tempFile.Close()
-	if _, err := io.Copy(tempFile, io.LimitReader(resp.Body, 8<<20)); err != nil {
-		cleanup()
-		return "", func() {}, err
-	}
-	return tempFile.Name(), cleanup, nil
 }

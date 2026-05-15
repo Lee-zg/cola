@@ -17,7 +17,11 @@ const updateThemeMode = (value: string | number | boolean) => {
 }
 
 const updateOpenBrowser = async (value: string | number | boolean) => {
-  await store.savePreferences({ openBrowser: String(value) })
+  await store.savePreferences({ ...store.preferences, openBrowser: String(value) })
+}
+
+const updateLazyFetchThumbnails = async (value: boolean) => {
+  await store.savePreferences({ ...store.preferences, lazyFetchThumbnails: value })
 }
 </script>
 
@@ -88,6 +92,17 @@ const updateOpenBrowser = async (value: string | number | boolean) => {
           </NSpace>
         </NRadioGroup>
         <NAlert type="info" :show-icon="false">找不到指定浏览器时会回退到系统默认浏览器。</NAlert>
+      </NSpace>
+    </NCard>
+
+    <NCard class="settings-card" :bordered="false">
+      <template #header>缩略图</template>
+      <NSpace vertical :size="14">
+        <NSpace align="center" justify="space-between">
+          <span>列表中自动补齐缩略图</span>
+          <NSwitch :value="store.preferences.lazyFetchThumbnails !== false" @update:value="updateLazyFetchThumbnails" />
+        </NSpace>
+        <NAlert type="info" :show-icon="false">自动获取会按 OpenGraph、Favicon、本地截图顺序缓存；截图引擎不可用时会保留错误状态。</NAlert>
       </NSpace>
     </NCard>
   </section>

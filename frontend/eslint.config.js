@@ -37,5 +37,16 @@ export default [
         ...globals.es2022
       }
     }
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        ...globals.node,
+        ...globals.es2022
+      }
+    }
   }
 ]

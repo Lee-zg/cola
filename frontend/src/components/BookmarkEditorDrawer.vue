@@ -1,10 +1,27 @@
 <!-- 文件说明：frontend/src/components/BookmarkEditorDrawer.vue，对应当前模块的界面或交互逻辑。 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { NButton, NDrawer, NDrawerContent, NDynamicTags, NForm, NFormItem, NIcon, NInput, NPopconfirm, NSpace, NTag, NTreeSelect } from 'naive-ui'
-import type { TreeSelectOption } from 'naive-ui'
+import { computed, ref, watch } from 'vue'
+import {
+  NAlert,
+  NButton,
+  NCheckbox,
+  NDrawer,
+  NDrawerContent,
+  NDynamicTags,
+  NForm,
+  NFormItem,
+  NIcon,
+  NImage,
+  NInput,
+  NPopconfirm,
+  NSpace,
+  NTag,
+  NTreeSelect,
+  NUpload
+} from 'naive-ui'
+import type { TreeSelectOption, UploadCustomRequestOptions, UploadFileInfo, UploadSettledFileInfo } from 'naive-ui'
 import { appIcons } from '../icons'
-import type { Bookmark, BookmarkInput, CategoryNode } from '../types'
+import type { Bookmark, BookmarkInput, CategoryNode, ThumbnailUploadInput } from '../types'
 
 const props = defineProps<{
   open: boolean
@@ -19,12 +36,32 @@ const emit = defineEmits<{
   close: []
   remove: []
   save: []
-  'fetch-preview': []
-  'save-preview': [path: string]
+  'refresh-thumbnail': []
+  'save-thumbnail': [input: ThumbnailUploadInput]
+  'save-thumbnail-url': [url: string]
+  'set-thumbnail-auto': [useAuto: boolean]
+  'clear-custom-thumbnail': []
   'update:draft': [patch: Partial<BookmarkInput>]
 }>()
 
-const previewPath = ref('')
+const thumbnailUrl = ref('')
+const thumbnailUploading = ref(false)
+const thumbnailFileList = ref<UploadFileInfo[]>([])
+const thumbnailImageNamePattern = /\.(gif|ico|jpe?g|png|svg|webp)$/i
+
+const selectedThumbnail = computed(() => props.selected?.thumbnail)
+const thumbnailDisplayPath = computed(() => selectedThumbnail.value?.displayPath || '')
+const autoThumbnailPath = computed(() => selectedThumbnail.value?.autoThumbPath || selectedThumbnail.value?.autoFilePath || '')
+const customThumbnailPath = computed(() => selectedThumbnail.value?.customThumbPath || selectedThumbnail.value?.customFilePath || '')
+const thumbnailSourceLabel = computed(() => {
+  const source = selectedThumbnail.value?.displaySource || ''
+  if (source === 'og') return 'OpenGraph'
+  if (source === 'favicon') return 'Favicon'
+  if (source === 'screenshot') return '本地截图'
+  if (source === 'upload') return '本地上传'
+  if (source === 'remote') return '图片地址'
+  return '尚未生成'
+})
 
 const updateTextField = (field: keyof Pick<BookmarkInput, 'title' | 'url' | 'description' | 'folder' | 'categoryId'>, value: string) => {
   emit('update:draft', { [field]: value })
@@ -53,12 +90,80 @@ const handleDrawerUpdate = (value: boolean) => {
   if (!value) emit('close')
 }
 
-const savePreview = () => {
-  const path = previewPath.value.trim()
-  if (!path) return
-  emit('save-preview', path)
-  previewPath.value = ''
+const encodeFileAsDataURL = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+
+const handleThumbnailUpload = async ({ file, onFinish, onError }: UploadCustomRequestOptions) => {
+  if (!file.file) {
+    onError()
+    return
+  }
+  thumbnailUploading.value = true
+  try {
+    const data = await encodeFileAsDataURL(file.file)
+    emit('save-thumbnail', {
+      fileName: file.name,
+      mime: file.type || file.file.type || '',
+      data
+    })
+    thumbnailFileList.value = [
+      {
+        id: file.id,
+        name: file.name,
+        status: 'finished',
+        url: data,
+        thumbnailUrl: data
+      }
+    ]
+    onFinish()
+  } catch {
+    onError()
+  } finally {
+    thumbnailUploading.value = false
+  }
 }
+
+const beforeThumbnailUpload = ({ file }: { file: UploadSettledFileInfo }) => {
+  return Boolean(file.type?.startsWith('image/') || thumbnailImageNamePattern.test(file.name))
+}
+
+const removeCustomThumbnail = () => {
+  thumbnailFileList.value = []
+  emit('clear-custom-thumbnail')
+  return true
+}
+
+const saveThumbnailUrl = () => {
+  const url = thumbnailUrl.value.trim()
+  if (!url) return
+  emit('save-thumbnail-url', url)
+  thumbnailUrl.value = ''
+}
+
+const syncThumbnailFileList = () => {
+  const path = customThumbnailPath.value
+  if (!props.selected || !path) {
+    thumbnailFileList.value = []
+    return
+  }
+  // 照片墙展示当前已缓存的自定义缩略图，便于用户删除或替换。
+  thumbnailFileList.value = [
+    {
+      id: `custom-${props.selected.id}`,
+      name: '自定义缩略图',
+      status: 'finished',
+      url: path,
+      thumbnailUrl: path
+    }
+  ]
+}
+
+watch([() => props.selected?.id, customThumbnailPath], syncThumbnailFileList, { immediate: true })
 </script>
 
 <template>
@@ -133,13 +238,66 @@ const savePreview = () => {
           <NDynamicTags :value="props.draft.aliases" @update:value="updateListField('aliases', $event)" />
         </NFormItem>
 
-        <NFormItem label="预览图片">
-          <NSpace vertical :size="8" class="editor-preview-tools">
-            <NInput v-model:value="previewPath" placeholder="本地图片路径，例如 D:\\preview.png" />
-            <NSpace :size="8">
-              <NButton secondary :disabled="!props.selected" @click="savePreview">绑定本地图</NButton>
-              <NButton secondary :disabled="!props.selected" @click="emit('fetch-preview')">自动获取</NButton>
+        <NFormItem label="缩略图">
+          <NSpace vertical :size="10" class="editor-thumbnail-tools">
+            <div class="thumbnail-preview-panel">
+              <NImage
+                v-if="thumbnailDisplayPath"
+                class="thumbnail-preview-image"
+                :src="thumbnailDisplayPath"
+                :preview-src="thumbnailDisplayPath"
+                object-fit="cover"
+              />
+              <div v-else class="thumbnail-preview-empty">
+                <NIcon :component="appIcons.library" />
+                <span>暂无缩略图</span>
+              </div>
+              <div class="thumbnail-preview-copy">
+                <strong>{{ thumbnailSourceLabel }}</strong>
+                <span v-if="selectedThumbnail?.autoStatus === 'error'">{{ selectedThumbnail.autoError }}</span>
+                <span v-else>{{ selectedThumbnail?.useAuto === false ? '正在使用自定义缩略图' : '正在使用自动缩略图' }}</span>
+              </div>
+            </div>
+
+            <NSpace align="center" justify="space-between" class="thumbnail-mode-row">
+              <NCheckbox
+                :checked="selectedThumbnail?.useAuto !== false"
+                :disabled="!props.selected"
+                @update:checked="emit('set-thumbnail-auto', Boolean($event))"
+              >
+                使用自动缩略图
+              </NCheckbox>
+              <NButton size="small" secondary :disabled="!props.selected" @click="emit('refresh-thumbnail')">刷新自动缩略图</NButton>
             </NSpace>
+
+            <div class="thumbnail-source-grid">
+              <div class="thumbnail-source-card">
+                <span>自动缓存</span>
+                <NTag size="small" round>{{ autoThumbnailPath ? selectedThumbnail?.autoSource || '已缓存' : '待获取' }}</NTag>
+              </div>
+              <div class="thumbnail-source-card">
+                <span>自定义缓存</span>
+                <NTag size="small" round>{{ customThumbnailPath ? selectedThumbnail?.customSource || '已缓存' : '未设置' }}</NTag>
+              </div>
+            </div>
+
+            <NUpload
+              v-model:file-list="thumbnailFileList"
+              accept="image/*"
+              :custom-request="handleThumbnailUpload"
+              :default-upload="true"
+              :disabled="!props.selected || thumbnailUploading"
+              :max="1"
+              :on-remove="removeCustomThumbnail"
+              :on-before-upload="beforeThumbnailUpload"
+              list-type="image-card"
+            />
+
+            <NSpace :size="8" align="center" class="thumbnail-url-tools">
+              <NInput v-model:value="thumbnailUrl" placeholder="粘贴图片地址，例如 https://example.com/cover.jpg" />
+              <NButton secondary :disabled="!props.selected || !thumbnailUrl.trim()" @click="saveThumbnailUrl">缓存地址图片</NButton>
+            </NSpace>
+            <NAlert type="info" :show-icon="false">自动缩略图按 OpenGraph、Favicon、本地截图顺序获取；自定义缩略图会缓存到本地。</NAlert>
           </NSpace>
         </NFormItem>
 

@@ -4,6 +4,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,8 @@ import (
 
 	"cola/internal/bookmark"
 )
+
+const tinyPNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
 
 func TestStoreCRUDSearchAndAnalysis(t *testing.T) {
 	ctx := context.Background()
@@ -364,7 +367,8 @@ func TestFetchBookmarkPreviewFromOpenGraph(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/image.png" {
 			w.Header().Set("Content-Type", "image/png")
-			_, _ = w.Write([]byte{0x89, 0x50, 0x4e, 0x47})
+			data, _ := base64.StdEncoding.DecodeString(tinyPNGBase64)
+			_, _ = w.Write(data)
 			return
 		}
 		_, _ = w.Write([]byte(`<html><head><meta property="og:image" content="/image.png"></head></html>`))
@@ -387,5 +391,187 @@ func TestFetchBookmarkPreviewFromOpenGraph(t *testing.T) {
 	}
 	if preview.Source != "auto" || !strings.HasPrefix(preview.FilePath, "/previews/original/") {
 		t.Fatalf("unexpected preview result: %#v", preview)
+	}
+}
+
+func TestThumbnailCustomUploadAndAutoModeSwitch(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	item, err := store.CreateBookmark(ctx, bookmark.BookmarkInput{Title: "Thumb", URL: "https://thumb.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	thumbnail, err := store.SaveCustomThumbnail(ctx, item.ID, bookmark.ThumbnailUploadInput{
+		FileName: "thumb.png",
+		Mime:     "image/png",
+		Data:     tinyPNGBase64,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if thumbnail.UseAuto || thumbnail.DisplaySource != "upload" || !strings.HasPrefix(thumbnail.DisplayPath, "/previews/") {
+		t.Fatalf("expected custom thumbnail display, got %#v", thumbnail)
+	}
+	thumbnail, err = store.SetThumbnailAutoMode(ctx, item.ID, bookmark.ThumbnailModeInput{UseAuto: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !thumbnail.UseAuto || thumbnail.DisplayPath != "" {
+		t.Fatalf("expected auto mode without cached image, got %#v", thumbnail)
+	}
+	thumbnail, err = store.SetThumbnailAutoMode(ctx, item.ID, bookmark.ThumbnailModeInput{UseAuto: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if thumbnail.DisplaySource != "upload" {
+		t.Fatalf("expected custom image after switching back, got %#v", thumbnail)
+	}
+}
+
+func TestCustomThumbnailURLRejectsNonImage(t *testing.T) {
+	ctx := context.Background()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("not an image"))
+	}))
+	defer server.Close()
+
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	item, err := store.CreateBookmark(ctx, bookmark.BookmarkInput{Title: "Bad", URL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SaveCustomThumbnailURL(ctx, item.ID, bookmark.ThumbnailURLInput{URL: server.URL}); err == nil {
+		t.Fatal("expected non-image thumbnail url to be rejected")
+	}
+}
+
+func TestCustomThumbnailURLCachesImage(t *testing.T) {
+	ctx := context.Background()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		data, _ := base64.StdEncoding.DecodeString(tinyPNGBase64)
+		_, _ = w.Write(data)
+	}))
+	defer server.Close()
+
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	item, err := store.CreateBookmark(ctx, bookmark.BookmarkInput{Title: "Remote", URL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	thumbnail, err := store.SaveCustomThumbnailURL(ctx, item.ID, bookmark.ThumbnailURLInput{URL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if thumbnail.UseAuto || thumbnail.DisplaySource != "remote" || !strings.HasPrefix(thumbnail.DisplayPath, "/previews/") {
+		t.Fatalf("expected remote thumbnail display, got %#v", thumbnail)
+	}
+}
+
+func TestCustomThumbnailUploadRejectsInvalidImage(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	item, err := store.CreateBookmark(ctx, bookmark.BookmarkInput{Title: "Invalid", URL: "https://invalid-thumb.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SaveCustomThumbnail(ctx, item.ID, bookmark.ThumbnailUploadInput{
+		FileName: "not-image.png",
+		Mime:     "image/png",
+		Data:     base64.StdEncoding.EncodeToString([]byte("not an image")),
+	}); err == nil {
+		t.Fatal("expected invalid uploaded thumbnail to be rejected")
+	}
+}
+
+func TestOpenMigratesLegacyPreviewToAutoThumbnail(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "legacy-preview.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.ExecContext(ctx, `CREATE TABLE bookmarks (
+		id TEXT PRIMARY KEY,
+		title TEXT NOT NULL,
+		url TEXT NOT NULL UNIQUE,
+		description TEXT NOT NULL DEFAULT '',
+		folder TEXT NOT NULL DEFAULT 'Unsorted',
+		category_id TEXT NOT NULL DEFAULT '',
+		tags TEXT NOT NULL DEFAULT '[]',
+		keywords TEXT NOT NULL DEFAULT '[]',
+		aliases TEXT NOT NULL DEFAULT '[]',
+		domain TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL,
+		last_analyzed_at TEXT
+	)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.ExecContext(ctx, `CREATE TABLE bookmark_previews (
+		id TEXT PRIMARY KEY,
+		bookmark_id TEXT NOT NULL,
+		source TEXT NOT NULL,
+		file_path TEXT NOT NULL,
+		thumb_path TEXT NOT NULL DEFAULT '',
+		original_url TEXT NOT NULL DEFAULT '',
+		mime TEXT NOT NULL DEFAULT '',
+		width INTEGER NOT NULL DEFAULT 0,
+		height INTEGER NOT NULL DEFAULT 0,
+		size INTEGER NOT NULL DEFAULT 0,
+		created_at TEXT NOT NULL
+	)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.ExecContext(ctx, `INSERT INTO bookmarks
+		(id, title, url, description, folder, category_id, tags, keywords, aliases, domain, created_at, updated_at)
+		VALUES('bm_legacy', 'Legacy', 'https://legacy.example', '', 'Unsorted', '', '[]', '[]', '[]', 'legacy.example', '2026-05-14T00:00:00Z', '2026-05-14T00:00:00Z')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.ExecContext(ctx, `INSERT INTO bookmark_previews
+		(id, bookmark_id, source, file_path, thumb_path, original_url, mime, width, height, size, created_at)
+		VALUES('preview_legacy', 'bm_legacy', 'auto', 'previews/original/old.png', 'previews/original/old.png', 'https://legacy.example/old.png', 'image/png', 12, 8, 4, '2026-05-14T00:00:00Z')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	item, err := store.GetBookmark(ctx, "bm_legacy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.Thumbnail == nil || !item.Thumbnail.UseAuto || item.Thumbnail.AutoThumbPath != "/previews/original/old.png" {
+		t.Fatalf("expected legacy preview migrated to auto thumbnail, got %#v", item.Thumbnail)
 	}
 }

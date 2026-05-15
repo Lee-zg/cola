@@ -8,7 +8,7 @@ export interface Bookmark {
   categoryId: string
   categoryName: string
   categoryPath: string[]
-  preview?: BookmarkPreview
+  thumbnail?: BookmarkThumbnail
   tags: string[]
   keywords: string[]
   aliases: string[]
@@ -86,6 +86,48 @@ export interface DeleteCategoryInput {
   deleteBookmarks: boolean
 }
 
+export interface BookmarkThumbnail {
+  id: string
+  bookmarkId: string
+  useAuto: boolean
+  displayPath: string
+  displaySource: string
+  autoSource: string
+  autoFilePath: string
+  autoThumbPath: string
+  autoOriginalUrl: string
+  autoMime: string
+  autoWidth: number
+  autoHeight: number
+  autoSize: number
+  autoStatus: string
+  autoError: string
+  autoFetchedAt?: string
+  customSource: string
+  customFilePath: string
+  customThumbPath: string
+  customOriginalUrl: string
+  customMime: string
+  customWidth: number
+  customHeight: number
+  customSize: number
+  customCreatedAt?: string
+}
+
+export interface ThumbnailUploadInput {
+  fileName: string
+  mime: string
+  data: string
+}
+
+export interface ThumbnailURLInput {
+  url: string
+}
+
+export interface ThumbnailModeInput {
+  useAuto: boolean
+}
+
 export interface BookmarkPreview {
   id: string
   bookmarkId: string
@@ -108,6 +150,7 @@ export interface PreviewInput {
 
 export interface AppPreferences {
   openBrowser: string
+  lazyFetchThumbnails: boolean
 }
 
 export interface ThemeManifest {

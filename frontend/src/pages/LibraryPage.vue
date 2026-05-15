@@ -14,6 +14,7 @@ import {
   NTooltip
 } from 'naive-ui'
 import BookmarkEditorDrawer from '../components/BookmarkEditorDrawer.vue'
+import BookmarkThumbnail from '../components/BookmarkThumbnail.vue'
 import ColaLoader from '../components/ColaLoader.vue'
 import CategoryTree from '../components/CategoryTree.vue'
 import ColaScrollbar from '../components/ColaScrollbar.vue'
@@ -50,9 +51,7 @@ const page = computed({
 const pageCount = computed(() => Math.max(1, Math.ceil(library.total.value / library.pageSize.value)))
 const showPagination = computed(() => library.viewMode.value !== 'list' && library.total.value > library.pageSize.value)
 
-const getPreviewStyle = (item: Bookmark) => ({
-  backgroundImage: item.preview?.thumbPath || item.preview?.filePath ? `url("${item.preview.thumbPath || item.preview.filePath}")` : ''
-})
+const thumbnailFallback = (item: Bookmark) => item.domain || item.title || '?'
 
 const createCategory = async (name: string, parentId: string) => {
   await library.createCategory(name, parentId)
@@ -155,7 +154,7 @@ const reorderCategory = async (id: string, direction: 'top' | 'up' | 'down') => 
             <table v-if="library.viewMode.value === 'table'" class="bookmark-table">
               <thead>
                 <tr>
-                  <th>预览</th>
+                  <th>缩略图</th>
                   <th>标题</th>
                   <th>分类</th>
                   <th>更新时间</th>
@@ -165,9 +164,7 @@ const reorderCategory = async (id: string, direction: 'top' | 'up' | 'down') => 
               <tbody>
                 <tr v-for="item in library.items.value" :key="item.id" :class="{ active: library.selectedId.value === item.id }">
                   <td>
-                    <div class="bookmark-preview small" :style="getPreviewStyle(item)">
-                      <span v-if="!item.preview">{{ (item.domain || item.title || '?').slice(0, 1).toUpperCase() }}</span>
-                    </div>
+                    <BookmarkThumbnail :src="item.thumbnail?.displayPath" :fallback-text="thumbnailFallback(item)" compact />
                   </td>
                   <td>
                     <button
@@ -185,7 +182,7 @@ const reorderCategory = async (id: string, direction: 'top' | 'up' | 'down') => 
                   <td>
                     <NSpace :size="6">
                       <NButton size="small" secondary @click="library.selectBookmark(item)">编辑</NButton>
-                      <NButton size="small" secondary @click="library.fetchPreview(item.id)">预览</NButton>
+                      <NButton size="small" secondary @click="library.refreshAutoThumbnail(item.id)">缩略图</NButton>
                     </NSpace>
                   </td>
                 </tr>
@@ -199,10 +196,12 @@ const reorderCategory = async (id: string, direction: 'top' | 'up' | 'down') => 
               :class="{ active: library.selectedId.value === item.id }"
               @click="handleBookmarkClick(item, $event)"
             >
-              <div class="bookmark-preview" :style="getPreviewStyle(item)">
-                <span v-if="!item.preview">{{ (item.domain || item.title || '?').slice(0, 1).toUpperCase() }}</span>
-                <button class="preview-action" type="button" @click.stop="library.fetchPreview(item.id)">获取预览</button>
-              </div>
+              <BookmarkThumbnail
+                :src="item.thumbnail?.displayPath"
+                :fallback-text="thumbnailFallback(item)"
+                action-label="获取缩略图"
+                @action="library.refreshAutoThumbnail(item.id)"
+              />
               <div class="bookmark-card-body">
                 <div class="bookmark-card-title">
                   <strong>{{ item.title || item.url }}</strong>
@@ -228,9 +227,7 @@ const reorderCategory = async (id: string, direction: 'top' | 'up' | 'down') => 
                 :class="{ active: library.selectedId.value === item.id }"
                 @click="handleBookmarkClick(item, $event)"
               >
-                <div class="bookmark-preview small" :style="getPreviewStyle(item)">
-                  <span v-if="!item.preview">{{ (item.domain || item.title || '?').slice(0, 1).toUpperCase() }}</span>
-                </div>
+                <BookmarkThumbnail :src="item.thumbnail?.displayPath" :fallback-text="thumbnailFallback(item)" compact />
                 <div>
                   <strong>{{ item.title || item.url }}</strong>
                   <span class="bookmark-url">{{ item.url }}</span>
@@ -268,10 +265,13 @@ const reorderCategory = async (id: string, direction: 'top' | 'up' | 'down') => 
       :status="library.status.value"
       @analyze="library.analyzeSelected"
       @close="library.closeEditor"
-      @fetch-preview="library.fetchPreview()"
+      @refresh-thumbnail="library.refreshAutoThumbnail()"
       @remove="library.removeSelected"
       @save="library.save"
-      @save-preview="library.savePreview"
+      @save-thumbnail="library.saveCustomThumbnail"
+      @save-thumbnail-url="library.saveCustomThumbnailUrl"
+      @set-thumbnail-auto="library.setThumbnailAutoMode"
+      @clear-custom-thumbnail="library.clearCustomThumbnail"
       @update:draft="library.updateDraft"
     />
   </section>

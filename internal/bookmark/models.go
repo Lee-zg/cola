@@ -37,6 +37,7 @@ type Bookmark struct {
 	CategoryName   string     `json:"categoryName"`
 	CategoryPath   []string   `json:"categoryPath"`
 	Preview        *Preview   `json:"preview,omitempty"`
+	Thumbnail      *Thumbnail `json:"thumbnail,omitempty"`
 	Tags           []string   `json:"tags"`
 	Keywords       []string   `json:"keywords"`
 	Aliases        []string   `json:"aliases"`
@@ -134,8 +135,55 @@ type PreviewInput struct {
 	OriginalURL string `json:"originalUrl"`
 }
 
+type Thumbnail struct {
+	ID                string     `json:"id"`
+	BookmarkID        string     `json:"bookmarkId"`
+	UseAuto           bool       `json:"useAuto"`
+	DisplayPath       string     `json:"displayPath"`
+	DisplaySource     string     `json:"displaySource"`
+	AutoSource        string     `json:"autoSource"`
+	AutoFilePath      string     `json:"autoFilePath"`
+	AutoThumbPath     string     `json:"autoThumbPath"`
+	AutoOriginalURL   string     `json:"autoOriginalUrl"`
+	AutoMime          string     `json:"autoMime"`
+	AutoWidth         int        `json:"autoWidth"`
+	AutoHeight        int        `json:"autoHeight"`
+	AutoSize          int64      `json:"autoSize"`
+	AutoStatus        string     `json:"autoStatus"`
+	AutoError         string     `json:"autoError"`
+	AutoFetchedAt     *time.Time `json:"autoFetchedAt,omitempty"`
+	CustomSource      string     `json:"customSource"`
+	CustomFilePath    string     `json:"customFilePath"`
+	CustomThumbPath   string     `json:"customThumbPath"`
+	CustomOriginalURL string     `json:"customOriginalUrl"`
+	CustomMime        string     `json:"customMime"`
+	CustomWidth       int        `json:"customWidth"`
+	CustomHeight      int        `json:"customHeight"`
+	CustomSize        int64      `json:"customSize"`
+	CustomCreatedAt   *time.Time `json:"customCreatedAt,omitempty"`
+}
+
+type ThumbnailUploadInput struct {
+	FileName string `json:"fileName"`
+	Mime     string `json:"mime"`
+	Data     string `json:"data"`
+}
+
+type ThumbnailURLInput struct {
+	URL string `json:"url"`
+}
+
+type ThumbnailModeInput struct {
+	UseAuto bool `json:"useAuto"`
+}
+
+type ThumbnailClearInput struct {
+	ClearAuto bool `json:"clearAuto"`
+}
+
 type AppPreferences struct {
-	OpenBrowser string `json:"openBrowser"`
+	OpenBrowser         string `json:"openBrowser"`
+	LazyFetchThumbnails bool   `json:"lazyFetchThumbnails"`
 }
 
 type ExportRequest struct {

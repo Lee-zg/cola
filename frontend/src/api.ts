@@ -4,6 +4,7 @@ import type {
   Bookmark,
   BookmarkInput,
   BookmarkPreview,
+  BookmarkThumbnail,
   CategoryInput,
   CategoryNode,
   DeleteCategoryInput,
@@ -13,6 +14,9 @@ import type {
   SearchRequest,
   SearchResult,
   ServerStatus,
+  ThumbnailModeInput,
+  ThumbnailUploadInput,
+  ThumbnailURLInput,
   ThemeManifest
 } from './types'
 
@@ -31,6 +35,12 @@ type Backend = {
   ListTags(): Promise<string[]>
   SaveBookmarkPreview(id: string, input: PreviewInput): Promise<BookmarkPreview>
   FetchBookmarkPreview(id: string): Promise<BookmarkPreview>
+  SaveCustomThumbnail(id: string, input: ThumbnailUploadInput): Promise<BookmarkThumbnail>
+  SaveCustomThumbnailUrl(id: string, input: ThumbnailURLInput): Promise<BookmarkThumbnail>
+  SetThumbnailAutoMode(id: string, input: ThumbnailModeInput): Promise<BookmarkThumbnail>
+  ClearCustomThumbnail(id: string): Promise<BookmarkThumbnail>
+  RefreshAutoThumbnail(id: string): Promise<BookmarkThumbnail>
+  EnsureAutoThumbnail(id: string): Promise<BookmarkThumbnail>
   GetPreferences(): Promise<AppPreferences>
   SavePreferences(prefs: AppPreferences): Promise<AppPreferences>
   OpenBookmark(id: string): Promise<void>
@@ -78,6 +88,12 @@ export const api = {
   listTags: () => backend().ListTags(),
   saveBookmarkPreview: (id: string, input: PreviewInput) => backend().SaveBookmarkPreview(id, input),
   fetchBookmarkPreview: (id: string) => backend().FetchBookmarkPreview(id),
+  saveCustomThumbnail: (id: string, input: ThumbnailUploadInput) => backend().SaveCustomThumbnail(id, input),
+  saveCustomThumbnailUrl: (id: string, url: string) => backend().SaveCustomThumbnailUrl(id, { url }),
+  setThumbnailAutoMode: (id: string, useAuto: boolean) => backend().SetThumbnailAutoMode(id, { useAuto }),
+  clearCustomThumbnail: (id: string) => backend().ClearCustomThumbnail(id),
+  refreshAutoThumbnail: (id: string) => backend().RefreshAutoThumbnail(id),
+  ensureAutoThumbnail: (id: string) => backend().EnsureAutoThumbnail(id),
   getPreferences: () => backend().GetPreferences(),
   savePreferences: (prefs: AppPreferences) => backend().SavePreferences(prefs),
   openBookmark: (id: string) => backend().OpenBookmark(id),

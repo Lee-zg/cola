@@ -2,7 +2,7 @@
 import { defineStore } from 'pinia'
 import { api } from '../api'
 import { blankBookmarkInput, toBookmarkInput } from '../helpers/bookmarkLists'
-import type { AppPreferences, Bookmark, BookmarkInput, CategoryNode, ServerStatus, ThemeManifest } from '../types'
+import type { AppPreferences, Bookmark, BookmarkInput, CategoryNode, ServerStatus, ThumbnailUploadInput, ThemeManifest } from '../types'
 
 export type LibraryViewMode = 'table' | 'cards' | 'list'
 export type CategoryReorderDirection = 'top' | 'up' | 'down'
@@ -13,6 +13,11 @@ const viewLimits: Record<LibraryViewMode, number> = {
   list: 100
 }
 
+const defaultPreferences = (): AppPreferences => ({
+  openBrowser: 'default',
+  lazyFetchThumbnails: true
+})
+
 export const useBookmarkStore = defineStore('bookmarks', {
   state: () => ({
     items: [] as Bookmark[],
@@ -20,7 +25,7 @@ export const useBookmarkStore = defineStore('bookmarks', {
     categories: [] as CategoryNode[],
     tags: [] as string[],
     templates: [] as ThemeManifest[],
-    preferences: { openBrowser: 'default' } as AppPreferences,
+    preferences: defaultPreferences() as AppPreferences,
     selected: null as Bookmark | null,
     draft: blankBookmarkInput() as BookmarkInput,
     query: '',
@@ -73,7 +78,8 @@ export const useBookmarkStore = defineStore('bookmarks', {
         this.tags = tags
         this.server = server
         this.templates = templates
-        this.preferences = preferences
+        this.preferences = { ...defaultPreferences(), ...preferences }
+        void this.ensureVisibleThumbnails()
       } finally {
         this.loading = false
         this.loadingMode = ''
@@ -153,13 +159,19 @@ export const useBookmarkStore = defineStore('bookmarks', {
       this.selected = item
       this.draft = item ? toBookmarkInput(item) : blankBookmarkInput()
     },
-    async save() {
+    async save(afterPersist?: () => void) {
       const saved = this.selected
         ? await api.updateBookmark(this.selected.id, this.draft)
         : await api.createBookmark(this.draft)
+      // 保存成功后先通知交互层关闭抽屉，再刷新列表并同步当前书签。
       this.selected = saved
+      this.draft = toBookmarkInput(saved)
       this.status = '已保存'
+      afterPersist?.()
       await this.refresh()
+      const refreshed = this.items.find((item) => item.id === saved.id)
+      this.selected = refreshed || saved
+      this.draft = toBookmarkInput(this.selected)
     },
     async loadMore() {
       if (this.loading || this.loadedCount >= this.total) return
@@ -267,24 +279,67 @@ export const useBookmarkStore = defineStore('bookmarks', {
       this.status = direction === 'top' ? '分类已置顶' : '分类顺序已调整'
       await this.refresh()
     },
-    async savePreview(path: string) {
-      if (!this.selected) return
-      await api.saveBookmarkPreview(this.selected.id, { source: 'manual', path, originalUrl: '' })
-      this.status = '预览图已更新'
-      await this.refresh()
+    patchItemThumbnail(id: string, thumbnail: Bookmark['thumbnail']) {
+      const index = this.items.findIndex((item) => item.id === id)
+      if (index >= 0) {
+        this.items[index] = { ...this.items[index], thumbnail }
+      }
+      if (this.selected?.id === id) {
+        this.selected = { ...this.selected, thumbnail }
+      }
     },
-    async fetchPreview(id?: string) {
+    async saveCustomThumbnail(input: ThumbnailUploadInput) {
+      if (!this.selected) return
+      const thumbnail = await api.saveCustomThumbnail(this.selected.id, input)
+      this.patchItemThumbnail(this.selected.id, thumbnail)
+      this.status = '缩略图已更新'
+    },
+    async saveCustomThumbnailUrl(url: string) {
+      if (!this.selected) return
+      const thumbnail = await api.saveCustomThumbnailUrl(this.selected.id, url)
+      this.patchItemThumbnail(this.selected.id, thumbnail)
+      this.status = '缩略图地址已缓存'
+    },
+    async setThumbnailAutoMode(useAuto: boolean) {
+      if (!this.selected) return
+      const thumbnail = await api.setThumbnailAutoMode(this.selected.id, useAuto)
+      this.patchItemThumbnail(this.selected.id, thumbnail)
+      this.status = useAuto ? '已使用自动缩略图' : '已使用自定义缩略图'
+      if (useAuto && !thumbnail.autoThumbPath && !thumbnail.autoFilePath) {
+        void this.refreshAutoThumbnail(this.selected.id)
+      }
+    },
+    async clearCustomThumbnail() {
+      if (!this.selected) return
+      const thumbnail = await api.clearCustomThumbnail(this.selected.id)
+      this.patchItemThumbnail(this.selected.id, thumbnail)
+      this.status = '自定义缩略图已删除'
+    },
+    async refreshAutoThumbnail(id?: string) {
       const bookmarkId = id || this.selected?.id
       if (!bookmarkId) return
-      await api.fetchBookmarkPreview(bookmarkId)
-      this.status = '预览图已获取'
-      await this.refresh()
+      const thumbnail = await api.refreshAutoThumbnail(bookmarkId)
+      this.patchItemThumbnail(bookmarkId, thumbnail)
+      this.status = thumbnail.autoStatus === 'error' ? `缩略图获取失败：${thumbnail.autoError}` : '自动缩略图已获取'
+    },
+    async ensureVisibleThumbnails() {
+      if (!this.preferences.lazyFetchThumbnails) return
+      const targets = this.items.filter((item) => {
+        const thumbnail = item.thumbnail
+        // 自动缩略图只要已有原图或压缩图任意一路缓存，就不重复触发后台补齐。
+        return thumbnail?.useAuto !== false && !thumbnail?.autoThumbPath && !thumbnail?.autoFilePath && thumbnail?.autoStatus !== 'error'
+      })
+      for (const item of targets.slice(0, 6)) {
+        api.ensureAutoThumbnail(item.id)
+          .then((thumbnail) => this.patchItemThumbnail(item.id, thumbnail))
+          .catch(() => undefined)
+      }
     },
     async openBookmark(id: string) {
       await api.openBookmark(id)
     },
     async savePreferences(preferences: AppPreferences) {
-      this.preferences = await api.savePreferences(preferences)
+      this.preferences = { ...defaultPreferences(), ...(await api.savePreferences({ ...this.preferences, ...preferences })) }
       this.status = '设置已保存'
     },
     async createBackup(path: string) {
