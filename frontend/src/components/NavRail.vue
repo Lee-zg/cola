@@ -21,10 +21,10 @@ const visibleCount = ref(routes.length)
 let resizeObserver: ResizeObserver | null = null
 
 const itemHeight = 52
-const itemGap = 7
-const dividerHeight = 7
-const groupGap = 10
-const overflowButtonSpace = 62
+const itemGap = 8
+const dividerHeight = 9
+const groupGap = 12
+const overflowButtonSpace = 64
 
 const visibleRoutes = computed(() => routes.slice(0, visibleCount.value))
 const overflowRoutes = computed(() => routes.slice(visibleCount.value))

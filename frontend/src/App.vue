@@ -24,7 +24,6 @@ import ExportPage from './pages/ExportPage.vue'
 import ImportPage from './pages/ImportPage.vue'
 import LibraryPage from './pages/LibraryPage.vue'
 import SettingsPage from './pages/SettingsPage.vue'
-import TaxonomyPage from './pages/TaxonomyPage.vue'
 import WebServerPage from './pages/WebServerPage.vue'
 import { darkThemeOverrides, lightThemeOverrides } from './theme/tokens'
 
@@ -35,7 +34,6 @@ const runtime = useDesktopRuntime()
 const routeComponents: Record<RoutePath, Component> = {
   '/': DashboardPage,
   '/library': LibraryPage,
-  '/taxonomy': TaxonomyPage,
   '/import': ImportPage,
   '/export': ExportPage,
   '/webserver': WebServerPage,

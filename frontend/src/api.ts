@@ -1,14 +1,19 @@
 // api 模块是前端访问 Wails 后端的唯一边界，页面和 store 不直接读取 window.go。
 import type {
   AppPreferences,
+  BatchCategoryDeleteInput,
+  BatchCategoryPinnedInput,
+  BatchCategoryReorderInput,
   Bookmark,
   BookmarkInput,
   BookmarkPreview,
   BookmarkThumbnail,
   CategoryInput,
   CategoryNode,
+  CategoryPinnedInput,
   DeleteCategoryInput,
   ImportResult,
+  ImportRequest,
   MoveCategoryInput,
   PreviewInput,
   SearchRequest,
@@ -24,12 +29,17 @@ type Backend = {
   CreateBookmark(input: BookmarkInput): Promise<Bookmark>
   UpdateBookmark(id: string, input: BookmarkInput): Promise<Bookmark>
   DeleteBookmark(id: string): Promise<void>
+  ClearBookmarksInCategory(id: string): Promise<void>
   ListBookmarks(req: SearchRequest): Promise<SearchResult>
   ListFolders(): Promise<string[]>
   ListCategories(): Promise<CategoryNode[]>
   CreateCategory(input: CategoryInput): Promise<CategoryNode>
   UpdateCategory(id: string, input: CategoryInput): Promise<CategoryNode>
   MoveCategory(id: string, input: MoveCategoryInput): Promise<CategoryNode>
+  SetCategoryPinned(id: string, input: CategoryPinnedInput): Promise<CategoryNode>
+  BatchSetCategoryPinned(input: BatchCategoryPinnedInput): Promise<void>
+  BatchDeleteCategories(input: BatchCategoryDeleteInput): Promise<void>
+  BatchReorderCategories(input: BatchCategoryReorderInput): Promise<void>
   DeleteCategory(id: string): Promise<void>
   DeleteCategoryWithOptions(id: string, input: DeleteCategoryInput): Promise<void>
   ListTags(): Promise<string[]>
@@ -45,7 +55,7 @@ type Backend = {
   SavePreferences(prefs: AppPreferences): Promise<AppPreferences>
   OpenBookmark(id: string): Promise<void>
   OpenURL(url: string): Promise<void>
-  ImportBookmarks(req: { sourceType: string; path: string }): Promise<ImportResult>
+  ImportBookmarks(req: ImportRequest): Promise<ImportResult>
   ExportBookmarks(req: { path: string; templateId: string }): Promise<string>
   AnalyzeBookmark(id: string): Promise<Bookmark>
   AnalyzeAllBookmarks(): Promise<number>
@@ -77,12 +87,17 @@ export const api = {
   createBookmark: (input: BookmarkInput) => backend().CreateBookmark(input),
   updateBookmark: (id: string, input: BookmarkInput) => backend().UpdateBookmark(id, input),
   deleteBookmark: (id: string) => backend().DeleteBookmark(id),
+  clearBookmarksInCategory: (id: string) => backend().ClearBookmarksInCategory(id),
   listBookmarks: (req: SearchRequest) => backend().ListBookmarks(req),
   listFolders: () => backend().ListFolders(),
   listCategories: () => backend().ListCategories(),
   createCategory: (input: CategoryInput) => backend().CreateCategory(input),
   updateCategory: (id: string, input: CategoryInput) => backend().UpdateCategory(id, input),
   moveCategory: (id: string, input: MoveCategoryInput) => backend().MoveCategory(id, input),
+  setCategoryPinned: (id: string, pinned: boolean) => backend().SetCategoryPinned(id, { pinned }),
+  batchSetCategoryPinned: (ids: string[], pinned: boolean) => backend().BatchSetCategoryPinned({ ids, pinned }),
+  batchDeleteCategories: (ids: string[], deleteBookmarks: boolean) => backend().BatchDeleteCategories({ ids, deleteBookmarks }),
+  batchReorderCategories: (ids: string[], direction: BatchCategoryReorderInput['direction']) => backend().BatchReorderCategories({ ids, direction }),
   deleteCategory: (id: string) => backend().DeleteCategory(id),
   deleteCategoryWithOptions: (id: string, input: DeleteCategoryInput) => backend().DeleteCategoryWithOptions(id, input),
   listTags: () => backend().ListTags(),
@@ -98,7 +113,7 @@ export const api = {
   savePreferences: (prefs: AppPreferences) => backend().SavePreferences(prefs),
   openBookmark: (id: string) => backend().OpenBookmark(id),
   openUrl: (url: string) => backend().OpenURL(url),
-  importBookmarks: (sourceType: string, path: string) => backend().ImportBookmarks({ sourceType, path }),
+  importBookmarks: (input: ImportRequest) => backend().ImportBookmarks(input),
   exportBookmarks: (path: string, templateId: string) => backend().ExportBookmarks({ path, templateId }),
   analyzeBookmark: (id: string) => backend().AnalyzeBookmark(id),
   analyzeAllBookmarks: () => backend().AnalyzeAllBookmarks(),

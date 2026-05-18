@@ -85,6 +85,13 @@ func (a *App) DeleteBookmark(id string) error {
 	return a.store.DeleteBookmark(a.context(), id)
 }
 
+func (a *App) ClearBookmarksInCategory(id string) error {
+	if err := a.ensureReady(a.context()); err != nil {
+		return err
+	}
+	return a.store.ClearBookmarksInCategory(a.context(), id)
+}
+
 func (a *App) GetBookmark(id string) (bookmark.Bookmark, error) {
 	if err := a.ensureReady(a.context()); err != nil {
 		return bookmark.Bookmark{}, err
@@ -141,6 +148,34 @@ func (a *App) MoveCategory(id string, input bookmark.MoveCategoryInput) (bookmar
 	return a.store.MoveCategory(a.context(), id, input)
 }
 
+func (a *App) SetCategoryPinned(id string, input bookmark.CategoryPinnedInput) (bookmark.CategoryNode, error) {
+	if err := a.ensureReady(a.context()); err != nil {
+		return bookmark.CategoryNode{}, err
+	}
+	return a.store.SetCategoryPinned(a.context(), id, input)
+}
+
+func (a *App) BatchSetCategoryPinned(input bookmark.BatchCategoryPinnedInput) error {
+	if err := a.ensureReady(a.context()); err != nil {
+		return err
+	}
+	return a.store.BatchSetCategoryPinned(a.context(), input)
+}
+
+func (a *App) BatchReorderCategories(input bookmark.BatchCategoryReorderInput) error {
+	if err := a.ensureReady(a.context()); err != nil {
+		return err
+	}
+	return a.store.BatchReorderCategories(a.context(), input)
+}
+
+func (a *App) BatchDeleteCategories(input bookmark.BatchCategoryDeleteInput) error {
+	if err := a.ensureReady(a.context()); err != nil {
+		return err
+	}
+	return a.store.BatchDeleteCategories(a.context(), input)
+}
+
 func (a *App) DeleteCategory(id string) error {
 	if err := a.ensureReady(a.context()); err != nil {
 		return err
@@ -159,11 +194,35 @@ func (a *App) ImportBookmarks(req bookmark.ImportRequest) (bookmark.ImportResult
 	if err := a.ensureReady(a.context()); err != nil {
 		return bookmark.ImportResult{}, err
 	}
+	req = bookmark.NormalizeImportRequest(req)
 	items, err := a.importer.Import(a.context(), req.SourceType, req.Path)
 	if err != nil {
 		return bookmark.ImportResult{}, err
 	}
-	return a.store.UpsertBookmarks(a.context(), items)
+	result, err := a.store.UpsertBookmarksWithOptions(a.context(), items, req.ImportOptions())
+	if err != nil {
+		return bookmark.ImportResult{}, err
+	}
+	if req.AutoAnalyze {
+		for _, id := range result.ChangedIDs {
+			item, err := a.store.GetBookmark(a.context(), id)
+			if err != nil {
+				result.Errors = append(result.Errors, err.Error())
+				continue
+			}
+			analysis, err := a.analyzer.Analyze(a.context(), item)
+			if err != nil {
+				result.Errors = append(result.Errors, err.Error())
+				continue
+			}
+			if _, err := a.store.ApplyAnalysis(a.context(), id, analysis); err != nil {
+				result.Errors = append(result.Errors, err.Error())
+				continue
+			}
+			result.Analyzed++
+		}
+	}
+	return result, nil
 }
 
 // ExportBookmarks 始终从当前数据库快照导出完整目录；筛选导出目前只存在于前端状态，不改变后端导出范围。

@@ -79,14 +79,25 @@ type SearchResult struct {
 }
 
 type ImportRequest struct {
-	SourceType string `json:"sourceType"`
-	Path       string `json:"path"`
+	SourceType     string `json:"sourceType"`
+	Path           string `json:"path"`
+	SkipDuplicates *bool  `json:"skipDuplicates,omitempty"`
+	AutoAnalyze    bool   `json:"autoAnalyze"`
+	KeepFolders    *bool  `json:"keepFolders,omitempty"`
 }
 
 type ImportResult struct {
-	Imported int      `json:"imported"`
-	Skipped  int      `json:"skipped"`
-	Errors   []string `json:"errors"`
+	Imported   int      `json:"imported"`
+	Updated    int      `json:"updated"`
+	Skipped    int      `json:"skipped"`
+	Analyzed   int      `json:"analyzed"`
+	Errors     []string `json:"errors"`
+	ChangedIDs []string `json:"-"`
+}
+
+type ImportOptions struct {
+	SkipDuplicates bool
+	KeepFolders    bool
 }
 
 type CategoryNode struct {
@@ -95,6 +106,8 @@ type CategoryNode struct {
 	ParentID  string         `json:"parentId"`
 	SortOrder int            `json:"sortOrder"`
 	IsSystem  bool           `json:"isSystem"`
+	IsPinned  bool           `json:"isPinned"`
+	PinnedAt  *time.Time     `json:"pinnedAt,omitempty"`
 	Count     int            `json:"count"`
 	CreatedAt time.Time      `json:"createdAt"`
 	UpdatedAt time.Time      `json:"updatedAt"`
@@ -109,6 +122,25 @@ type CategoryInput struct {
 type MoveCategoryInput struct {
 	ParentID  string `json:"parentId"`
 	SortOrder int    `json:"sortOrder"`
+}
+
+type CategoryPinnedInput struct {
+	Pinned bool `json:"pinned"`
+}
+
+type BatchCategoryPinnedInput struct {
+	IDs    []string `json:"ids"`
+	Pinned bool     `json:"pinned"`
+}
+
+type BatchCategoryDeleteInput struct {
+	IDs             []string `json:"ids"`
+	DeleteBookmarks bool     `json:"deleteBookmarks"`
+}
+
+type BatchCategoryReorderInput struct {
+	IDs       []string `json:"ids"`
+	Direction string   `json:"direction"`
 }
 
 type DeleteCategoryInput struct {
@@ -268,6 +300,26 @@ func NormalizeBrowserSetting(value string) string {
 	default:
 		return DefaultBrowserSetting
 	}
+}
+
+func NormalizeImportRequest(req ImportRequest) ImportRequest {
+	req.SourceType = strings.ToLower(strings.TrimSpace(req.SourceType))
+	req.Path = strings.TrimSpace(req.Path)
+	return req
+}
+
+func (req ImportRequest) ImportOptions() ImportOptions {
+	return ImportOptions{
+		SkipDuplicates: boolOrDefault(req.SkipDuplicates, true),
+		KeepFolders:    boolOrDefault(req.KeepFolders, true),
+	}
+}
+
+func boolOrDefault(value *bool, fallback bool) bool {
+	if value == nil {
+		return fallback
+	}
+	return *value
 }
 
 // NormalizeURL 接受用户省略 scheme 的输入，但只允许桌面书签目录需要展示的常见协议。

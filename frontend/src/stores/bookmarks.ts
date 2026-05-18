@@ -1,11 +1,11 @@
 // bookmarks store 是前端业务状态聚合层，负责协调书签、元数据、导入导出、备份和本地服务状态。
 import { defineStore } from 'pinia'
 import { api } from '../api'
-import { blankBookmarkInput, toBookmarkInput } from '../helpers/bookmarkLists'
-import type { AppPreferences, Bookmark, BookmarkInput, CategoryNode, ServerStatus, ThumbnailUploadInput, ThemeManifest } from '../types'
+import { blankBookmarkInput, normalizeBookmarkCategoryInput, toBookmarkInput } from '../helpers/bookmarkLists'
+import type { AppPreferences, Bookmark, BookmarkInput, CategoryNode, ImportRequest, ImportResult, ServerStatus, ThumbnailUploadInput, ThemeManifest } from '../types'
 
 export type LibraryViewMode = 'table' | 'cards' | 'list'
-export type CategoryReorderDirection = 'top' | 'up' | 'down'
+export type CategoryReorderDirection = 'up' | 'down'
 
 const viewLimits: Record<LibraryViewMode, number> = {
   table: 50,
@@ -160,9 +160,10 @@ export const useBookmarkStore = defineStore('bookmarks', {
       this.draft = item ? toBookmarkInput(item) : blankBookmarkInput()
     },
     async save(afterPersist?: () => void) {
+      const draft = normalizeBookmarkCategoryInput(this.draft, this.categories)
       const saved = this.selected
-        ? await api.updateBookmark(this.selected.id, this.draft)
-        : await api.createBookmark(this.draft)
+        ? await api.updateBookmark(this.selected.id, draft)
+        : await api.createBookmark(draft)
       // 保存成功后先通知交互层关闭抽屉，再刷新列表并同步当前书签。
       this.selected = saved
       this.draft = toBookmarkInput(saved)
@@ -201,11 +202,12 @@ export const useBookmarkStore = defineStore('bookmarks', {
       this.status = `已分析 ${count} 个书签`
       await this.refresh()
     },
-    async importFrom(sourceType: string, path: string) {
+    async importFrom(input: ImportRequest): Promise<ImportResult> {
       // 导入去重规则在后端存储层执行，前端只负责提交来源和展示汇总结果。
-      const result = await api.importBookmarks(sourceType, path)
-      this.status = `导入 ${result.imported} 个，跳过 ${result.skipped} 个`
+      const result = await api.importBookmarks(input)
+      this.status = `导入 ${result.imported} 个，更新 ${result.updated} 个，跳过 ${result.skipped} 个`
       await this.refresh()
+      return result
     },
     async exportTo(path: string, templateId: string) {
       const output = await api.exportBookmarks(path, templateId)
@@ -233,6 +235,13 @@ export const useBookmarkStore = defineStore('bookmarks', {
       this.status = deleteBookmarks ? '分类及书签已删除' : '分类已删除，书签已移动到父级'
       await this.refresh()
     },
+    async clearBookmarksInCategory(id: string) {
+      await api.clearBookmarksInCategory(id)
+      // 清空分类内容后关闭可能已被删除的书签编辑态，避免抽屉继续展示失效数据。
+      this.select(null)
+      this.status = id === 'category_uncategorized' ? '未分类书签已清空' : '分类下书签已清空'
+      await this.refresh()
+    },
     findCategory(id: string) {
       const stack = [...this.categories]
       while (stack.length) {
@@ -257,26 +266,33 @@ export const useBookmarkStore = defineStore('bookmarks', {
       }
       return visit(this.categories, null)
     },
+    async setCategoryPinned(id: string, pinned: boolean) {
+      await api.setCategoryPinned(id, pinned)
+      this.status = pinned ? '分类已置顶' : '分类已取消置顶'
+      await this.refresh()
+    },
+    async batchSetCategoryPinned(ids: string[], pinned: boolean) {
+      if (!ids.length) return
+      await api.batchSetCategoryPinned(ids, pinned)
+      this.status = pinned ? `已置顶 ${ids.length} 个分类` : `已取消置顶 ${ids.length} 个分类`
+      await this.refresh()
+    },
+    async batchDeleteCategories(ids: string[], deleteBookmarks = false) {
+      if (!ids.length) return
+      await api.batchDeleteCategories(ids, deleteBookmarks)
+      if (ids.includes(this.categoryId)) this.categoryId = ''
+      this.status = deleteBookmarks ? `已删除 ${ids.length} 个分类及书签` : `已删除 ${ids.length} 个分类，书签已移动到父级`
+      await this.refresh()
+    },
+    async batchReorderCategories(ids: string[], direction: CategoryReorderDirection) {
+      if (!ids.length) return
+      await api.batchReorderCategories(ids, direction)
+      this.status = '分类顺序已调整'
+      await this.refresh()
+    },
     async reorderCategory(id: string, direction: CategoryReorderDirection) {
-      const context = this.findCategoryContext(id)
-      if (!context || context.node.isSystem) return
-
-      const firstMovableIndex = context.siblings.findIndex((category) => !category.isSystem)
-      let targetIndex = context.index
-      if (direction === 'top') {
-        targetIndex = firstMovableIndex >= 0 ? firstMovableIndex : 0
-      } else if (direction === 'up') {
-        targetIndex = Math.max(context.index - 1, firstMovableIndex >= 0 ? firstMovableIndex : 0)
-      } else {
-        targetIndex = Math.min(context.index + 1, context.siblings.length - 1)
-      }
-      if (targetIndex === context.index) return
-
-      await api.moveCategory(id, {
-        parentId: context.node.parentId || 'category_all',
-        sortOrder: targetIndex
-      })
-      this.status = direction === 'top' ? '分类已置顶' : '分类顺序已调整'
+      await api.batchReorderCategories([id], direction)
+      this.status = '分类顺序已调整'
       await this.refresh()
     },
     patchItemThumbnail(id: string, thumbnail: Bookmark['thumbnail']) {

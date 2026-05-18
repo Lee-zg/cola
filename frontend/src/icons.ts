@@ -2,6 +2,7 @@
 import type { Component } from 'vue'
 import {
   AddCircleOutline,
+  AddOutline,
   AnalyticsOutline,
   ArchiveOutline,
   BookmarksOutline,
@@ -23,8 +24,8 @@ import {
   OpenOutline,
   PencilOutline,
   PinOutline,
+  Pin,
   PlayForwardOutline,
-  PricetagsOutline,
   RefreshOutline,
   RemoveOutline,
   RocketOutline,
@@ -38,12 +39,14 @@ import {
   StopOutline,
   SunnyOutline,
   TrashOutline,
+  TrashBinOutline,
   ArrowDownOutline,
   ArrowUpOutline
 } from '@vicons/ionicons5'
 
 export type AppIconKey =
   | 'add'
+  | 'addPlain'
   | 'ai'
   | 'backup'
   | 'bookmarks'
@@ -65,6 +68,7 @@ export type AppIconKey =
   | 'open'
   | 'pencil'
   | 'pin'
+  | 'pinFilled'
   | 'overflow'
   | 'refresh'
   | 'save'
@@ -74,14 +78,15 @@ export type AppIconKey =
   | 'stats'
   | 'stop'
   | 'sun'
-  | 'tags'
   | 'trash'
+  | 'trashBin'
   | 'up'
   | 'down'
   | 'web'
 
 export const appIcons: Record<AppIconKey, Component> = {
   add: AddCircleOutline,
+  addPlain: AddOutline,
   ai: SparklesOutline,
   backup: ArchiveOutline,
   bookmarks: BookmarksOutline,
@@ -104,6 +109,7 @@ export const appIcons: Record<AppIconKey, Component> = {
   open: OpenOutline,
   pencil: PencilOutline,
   pin: PinOutline,
+  pinFilled: Pin,
   overflow: PlayForwardOutline,
   refresh: RefreshOutline,
   save: SaveOutline,
@@ -113,8 +119,8 @@ export const appIcons: Record<AppIconKey, Component> = {
   stats: StatsChartOutline,
   stop: StopOutline,
   sun: SunnyOutline,
-  tags: PricetagsOutline,
   trash: TrashOutline,
+  trashBin: TrashBinOutline,
   up: ArrowUpOutline,
   web: GlobeOutline
 }

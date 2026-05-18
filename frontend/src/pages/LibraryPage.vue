@@ -7,6 +7,7 @@ import {
   NIcon,
   NInput,
   NPagination,
+  NPopconfirm,
   NRadioButton,
   NRadioGroup,
   NSpace,
@@ -65,8 +66,16 @@ const deleteCategory = async (id: string, deleteBookmarks: boolean) => {
   await library.deleteCategory(id, deleteBookmarks)
 }
 
+const clearBookmarksInCategory = async (id: string) => {
+  await library.clearBookmarksInCategory(id)
+}
+
 const handleBookmarkClick = async (item: Bookmark, event: MouseEvent) => {
   await library.openBookmark(item, event)
+}
+
+const deleteBookmark = async (item: Bookmark) => {
+  await library.removeBookmark(item)
 }
 
 const handleListReachBottom = async () => {
@@ -79,8 +88,24 @@ const selectCategory = (id: string) => {
   library.categoryId.value = id
 }
 
-const reorderCategory = async (id: string, direction: 'top' | 'up' | 'down') => {
+const reorderCategory = async (id: string, direction: 'up' | 'down') => {
   await library.reorderCategory(id, direction)
+}
+
+const pinCategory = async (id: string, pinned: boolean) => {
+  await library.setCategoryPinned(id, pinned)
+}
+
+const batchPinCategories = async (ids: string[], pinned: boolean) => {
+  await library.batchSetCategoryPinned(ids, pinned)
+}
+
+const batchDeleteCategories = async (ids: string[], deleteBookmarks: boolean) => {
+  await library.batchDeleteCategories(ids, deleteBookmarks)
+}
+
+const batchReorderCategories = async (ids: string[], direction: 'up' | 'down') => {
+  await library.batchReorderCategories(ids, direction)
 }
 </script>
 
@@ -107,8 +132,13 @@ const reorderCategory = async (id: string, direction: 'top' | 'up' | 'down') => 
       <CategoryTree
         :categories="library.categories.value"
         :selected-id="library.categoryId.value"
+        @batch-delete="batchDeleteCategories"
+        @batch-pin="batchPinCategories"
+        @batch-reorder="batchReorderCategories"
         @create="createCategory"
+        @clear-bookmarks="clearBookmarksInCategory"
         @delete="deleteCategory"
+        @pin="pinCategory"
         @rename="renameCategory"
         @reorder="reorderCategory"
         @select="selectCategory"
@@ -183,6 +213,16 @@ const reorderCategory = async (id: string, direction: 'top' | 'up' | 'down') => 
                     <NSpace :size="6">
                       <NButton size="small" secondary @click="library.selectBookmark(item)">编辑</NButton>
                       <NButton size="small" secondary @click="library.refreshAutoThumbnail(item.id)">缩略图</NButton>
+                      <NPopconfirm positive-text="删除" negative-text="取消" @positive-click="deleteBookmark(item)">
+                        <template #trigger>
+                          <NButton size="small" type="error" secondary aria-label="删除书签" @click.stop>
+                            <template #icon>
+                              <NIcon :component="appIcons.trash" />
+                            </template>
+                          </NButton>
+                        </template>
+                        删除当前书签？
+                      </NPopconfirm>
                     </NSpace>
                   </td>
                 </tr>
@@ -205,9 +245,21 @@ const reorderCategory = async (id: string, direction: 'top' | 'up' | 'down') => 
               <div class="bookmark-card-body">
                 <div class="bookmark-card-title">
                   <strong>{{ item.title || item.url }}</strong>
-                  <span class="open-hint">
-                    <NIcon :component="appIcons.open" />
-                    Ctrl 打开
+                  <span class="bookmark-card-tools">
+                    <span class="open-hint">
+                      <NIcon :component="appIcons.open" />
+                      Ctrl 打开
+                    </span>
+                    <NPopconfirm positive-text="删除" negative-text="取消" @positive-click="deleteBookmark(item)">
+                      <template #trigger>
+                        <NButton circle size="tiny" type="error" secondary aria-label="删除书签" @click.stop>
+                          <template #icon>
+                            <NIcon :component="appIcons.trash" />
+                          </template>
+                        </NButton>
+                      </template>
+                      删除当前书签？
+                    </NPopconfirm>
                   </span>
                 </div>
                 <span class="bookmark-url">{{ item.url }}</span>
@@ -229,7 +281,19 @@ const reorderCategory = async (id: string, direction: 'top' | 'up' | 'down') => 
               >
                 <BookmarkThumbnail :src="item.thumbnail?.displayPath" :fallback-text="thumbnailFallback(item)" compact />
                 <div>
-                  <strong>{{ item.title || item.url }}</strong>
+                  <div class="bookmark-row-title">
+                    <strong>{{ item.title || item.url }}</strong>
+                    <NPopconfirm positive-text="删除" negative-text="取消" @positive-click="deleteBookmark(item)">
+                      <template #trigger>
+                        <NButton circle size="tiny" type="error" secondary aria-label="删除书签" @click.stop>
+                          <template #icon>
+                            <NIcon :component="appIcons.trash" />
+                          </template>
+                        </NButton>
+                      </template>
+                      删除当前书签？
+                    </NPopconfirm>
+                  </div>
                   <span class="bookmark-url">{{ item.url }}</span>
                   <p>{{ item.description || item.categoryPath?.join(' / ') || item.folder }}</p>
                 </div>

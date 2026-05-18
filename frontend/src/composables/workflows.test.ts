@@ -16,17 +16,36 @@ describe('workflow composables', () => {
     const store = useBookmarkStore()
     store.importFrom = vi.fn(async () => {
       store.setStatus('导入 2 个，跳过 1 个')
+      return { imported: 2, updated: 0, skipped: 1, analyzed: 0, errors: [] }
     })
 
     const workflow = useImportWorkflow()
     expect(workflow.importSource.value).toBe('html')
     expect(workflow.skipDuplicates.value).toBe(true)
+    workflow.importPath.value = 'D:\\bookmarks.html'
 
     await workflow.startImport()
 
-    expect(store.importFrom).toHaveBeenCalledWith('html', '')
+    expect(store.importFrom).toHaveBeenCalledWith({
+      sourceType: 'html',
+      path: 'D:\\bookmarks.html',
+      skipDuplicates: true,
+      autoAnalyze: false,
+      keepFolders: true
+    })
     expect(workflow.importing.value).toBe(false)
-    expect(workflow.importHistory.value[0].message).toBe('导入 2 个，跳过 1 个')
+    expect(workflow.importHistory.value[0].message).toBe('导入 2 个，更新 0 个，跳过 1 个')
+  })
+
+  it('blocks html import without a file path', async () => {
+    const store = useBookmarkStore()
+    store.importFrom = vi.fn(async () => ({ imported: 0, updated: 0, skipped: 0, analyzed: 0, errors: [] }))
+    const workflow = useImportWorkflow()
+
+    await workflow.startImport()
+
+    expect(store.importFrom).not.toHaveBeenCalled()
+    expect(workflow.lastError.value).toBe('HTML 文件导入需要填写文件路径。')
   })
 
   it('selects first available export template and exports with chosen path', async () => {

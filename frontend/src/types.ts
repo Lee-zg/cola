@@ -56,8 +56,18 @@ export interface ServerStatus {
 
 export interface ImportResult {
   imported: number
+  updated: number
   skipped: number
+  analyzed: number
   errors: string[]
+}
+
+export interface ImportRequest {
+  sourceType: string
+  path: string
+  skipDuplicates?: boolean
+  autoAnalyze?: boolean
+  keepFolders?: boolean
 }
 
 export interface CategoryNode {
@@ -66,6 +76,8 @@ export interface CategoryNode {
   parentId: string
   sortOrder: number
   isSystem: boolean
+  isPinned: boolean
+  pinnedAt?: string
   count: number
   createdAt: string
   updatedAt: string
@@ -80,6 +92,25 @@ export interface CategoryInput {
 export interface MoveCategoryInput {
   parentId: string
   sortOrder: number
+}
+
+export interface CategoryPinnedInput {
+  pinned: boolean
+}
+
+export interface BatchCategoryPinnedInput {
+  ids: string[]
+  pinned: boolean
+}
+
+export interface BatchCategoryDeleteInput {
+  ids: string[]
+  deleteBookmarks: boolean
+}
+
+export interface BatchCategoryReorderInput {
+  ids: string[]
+  direction: 'up' | 'down'
 }
 
 export interface DeleteCategoryInput {

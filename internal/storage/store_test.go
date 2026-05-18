@@ -65,6 +65,43 @@ func TestStoreCRUDSearchAndAnalysis(t *testing.T) {
 	}
 }
 
+func TestStoreCanDeleteUncategorizedBookmark(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	item, err := store.CreateBookmark(ctx, bookmark.BookmarkInput{
+		Title: "No Category",
+		URL:   "https://uncategorized-delete.example",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.CategoryID != bookmark.UncategorizedID {
+		t.Fatalf("expected uncategorized bookmark, got %#v", item)
+	}
+	page, err := store.ListBookmarks(ctx, bookmark.SearchRequest{CategoryID: bookmark.UncategorizedID, IncludeDescendants: true, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 1 || page.Items[0].ID != item.ID {
+		t.Fatalf("expected bookmark under uncategorized filter, got %#v", page)
+	}
+	if err := store.DeleteBookmark(ctx, item.ID); err != nil {
+		t.Fatal(err)
+	}
+	page, err = store.ListBookmarks(ctx, bookmark.SearchRequest{CategoryID: bookmark.UncategorizedID, IncludeDescendants: true, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 0 {
+		t.Fatalf("expected uncategorized bookmark deleted, got %#v", page)
+	}
+}
+
 func TestStoreUpsertSkipsDuplicates(t *testing.T) {
 	ctx := context.Background()
 	store, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"))
@@ -82,6 +119,64 @@ func TestStoreUpsertSkipsDuplicates(t *testing.T) {
 	}
 	if result.Imported != 1 || result.Skipped != 1 {
 		t.Fatalf("unexpected import result: %#v", result)
+	}
+}
+
+func TestStoreUpsertUpdatesDuplicatesWhenAllowed(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	initial, err := store.UpsertBookmarksWithOptions(ctx, []bookmark.BookmarkInput{
+		{Title: "Old", URL: "https://example.com/update", Folder: "Old"},
+	}, bookmark.ImportOptions{SkipDuplicates: true, KeepFolders: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := store.UpsertBookmarksWithOptions(ctx, []bookmark.BookmarkInput{
+		{Title: "New", URL: "https://example.com/update", Folder: "New / Folder"},
+	}, bookmark.ImportOptions{SkipDuplicates: false, KeepFolders: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if initial.Imported != 1 || updated.Updated != 1 || updated.Skipped != 0 {
+		t.Fatalf("unexpected upsert results: initial=%#v updated=%#v", initial, updated)
+	}
+	page, err := store.ListBookmarks(ctx, bookmark.SearchRequest{Query: "New", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 1 || strings.Join(page.Items[0].CategoryPath, " / ") != "New / Folder" {
+		t.Fatalf("expected updated bookmark category, got %#v", page)
+	}
+}
+
+func TestStoreUpsertCanDropImportedFolders(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	result, err := store.UpsertBookmarksWithOptions(ctx, []bookmark.BookmarkInput{
+		{Title: "Flat", URL: "https://flat.example", Folder: "Nested / Folder"},
+	}, bookmark.ImportOptions{SkipDuplicates: true, KeepFolders: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Imported != 1 {
+		t.Fatalf("expected one imported bookmark, got %#v", result)
+	}
+	page, err := store.ListBookmarks(ctx, bookmark.SearchRequest{Query: "Flat", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 1 || page.Items[0].CategoryID != bookmark.UncategorizedID {
+		t.Fatalf("expected uncategorized import, got %#v", page)
 	}
 }
 
@@ -359,6 +454,223 @@ func TestMoveCategoryReordersOnlySiblings(t *testing.T) {
 	want := []string{third.Name, first.Name, second.Name}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("expected reordered siblings %v, got %v", want, got)
+	}
+}
+
+func TestCategoryPinOrdersNewestFirstAndUnpinKeepsNormalOrder(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	first, err := store.CreateCategory(ctx, bookmark.CategoryInput{Name: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.CreateCategory(ctx, bookmark.CategoryInput{Name: "B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	third, err := store.CreateCategory(ctx, bookmark.CategoryInput{Name: "C"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SetCategoryPinned(ctx, first.ID, bookmark.CategoryPinnedInput{Pinned: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SetCategoryPinned(ctx, third.ID, bookmark.CategoryPinnedInput{Pinned: true}); err != nil {
+		t.Fatal(err)
+	}
+	tree, err := store.ListCategories(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotPinned := []string{}
+	for _, child := range tree[0].Children {
+		if child.IsPinned {
+			gotPinned = append(gotPinned, child.Name)
+		}
+	}
+	if strings.Join(gotPinned, ",") != "C,A" {
+		t.Fatalf("expected newest pinned first, got %v", gotPinned)
+	}
+	if _, err := store.SetCategoryPinned(ctx, third.ID, bookmark.CategoryPinnedInput{Pinned: false}); err != nil {
+		t.Fatal(err)
+	}
+	tree, err = store.ListCategories(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := []string{}
+	for _, child := range tree[0].Children {
+		if !child.IsSystem {
+			got = append(got, child.Name)
+		}
+	}
+	if strings.Join(got, ",") != strings.Join([]string{first.Name, second.Name, third.Name}, ",") {
+		t.Fatalf("expected unpinned category to return to normal order, got %v", got)
+	}
+}
+
+func TestBatchDeleteCategoriesMovesBookmarksToEachParent(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	dev, err := store.CreateCategory(ctx, bookmark.CategoryInput{Name: "开发"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	goCat, err := store.CreateCategory(ctx, bookmark.CategoryInput{Name: "Go", ParentID: dev.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ops, err := store.CreateCategory(ctx, bookmark.CategoryInput{Name: "运维"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runbook, err := store.CreateCategory(ctx, bookmark.CategoryInput{Name: "手册", ParentID: ops.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	goItem, err := store.CreateBookmark(ctx, bookmark.BookmarkInput{Title: "Go", URL: "https://go.dev/batch", CategoryID: goCat.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	opsItem, err := store.CreateBookmark(ctx, bookmark.BookmarkInput{Title: "Ops", URL: "https://ops.example/batch", CategoryID: runbook.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BatchDeleteCategories(ctx, bookmark.BatchCategoryDeleteInput{IDs: []string{goCat.ID, runbook.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	updatedGo, err := store.GetBookmark(ctx, goItem.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updatedOps, err := store.GetBookmark(ctx, opsItem.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedGo.CategoryID != dev.ID || updatedOps.CategoryID != ops.ID {
+		t.Fatalf("expected bookmarks moved to each parent, got %#v and %#v", updatedGo, updatedOps)
+	}
+}
+
+func TestBatchReorderRequiresSameParentAndUnpinned(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	first, err := store.CreateCategory(ctx, bookmark.CategoryInput{Name: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.CreateCategory(ctx, bookmark.CategoryInput{Name: "B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	third, err := store.CreateCategory(ctx, bookmark.CategoryInput{Name: "C"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := store.CreateCategory(ctx, bookmark.CategoryInput{Name: "Child", ParentID: first.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BatchReorderCategories(ctx, bookmark.BatchCategoryReorderInput{IDs: []string{second.ID, third.ID}, Direction: "up"}); err != nil {
+		t.Fatal(err)
+	}
+	tree, err := store.ListCategories(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := []string{}
+	for _, child := range tree[0].Children {
+		if !child.IsSystem {
+			got = append(got, child.Name)
+		}
+	}
+	if strings.Join(got, ",") != "B,C,A" {
+		t.Fatalf("expected selected block moved up, got %v", got)
+	}
+	if err := store.BatchReorderCategories(ctx, bookmark.BatchCategoryReorderInput{IDs: []string{first.ID, child.ID}, Direction: "down"}); err == nil {
+		t.Fatal("expected cross-parent batch reorder to fail")
+	}
+	if _, err := store.SetCategoryPinned(ctx, second.ID, bookmark.CategoryPinnedInput{Pinned: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BatchReorderCategories(ctx, bookmark.BatchCategoryReorderInput{IDs: []string{second.ID}, Direction: "down"}); err == nil {
+		t.Fatal("expected pinned category reorder to fail")
+	}
+}
+
+func TestBatchReorderKeepsPinnedSortSlotForUnpin(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	first, err := store.CreateCategory(ctx, bookmark.CategoryInput{Name: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinned, err := store.CreateCategory(ctx, bookmark.CategoryInput{Name: "B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	third, err := store.CreateCategory(ctx, bookmark.CategoryInput{Name: "C"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SetCategoryPinned(ctx, pinned.ID, bookmark.CategoryPinnedInput{Pinned: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BatchReorderCategories(ctx, bookmark.BatchCategoryReorderInput{IDs: []string{third.ID}, Direction: "up"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SetCategoryPinned(ctx, pinned.ID, bookmark.CategoryPinnedInput{Pinned: false}); err != nil {
+		t.Fatal(err)
+	}
+	tree, err := store.ListCategories(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := []string{}
+	for _, child := range tree[0].Children {
+		if !child.IsSystem {
+			got = append(got, child.Name)
+		}
+	}
+	want := []string{third.Name, pinned.Name, first.Name}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("expected unpinned category to keep reserved sort slot, got %v", got)
+	}
+}
+
+func TestSystemCategoryCannotBePinnedOrBatchDeleted(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	if _, err := store.SetCategoryPinned(ctx, bookmark.UncategorizedID, bookmark.CategoryPinnedInput{Pinned: true}); err == nil {
+		t.Fatal("expected system category pin to fail")
+	}
+	if err := store.BatchDeleteCategories(ctx, bookmark.BatchCategoryDeleteInput{IDs: []string{bookmark.UncategorizedID}}); err == nil {
+		t.Fatal("expected system category batch delete to fail")
 	}
 }
 

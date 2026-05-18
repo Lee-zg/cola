@@ -4,7 +4,6 @@ import type { AppIconKey } from './icons'
 export type RoutePath =
   | '/'
   | '/library'
-  | '/taxonomy'
   | '/import'
   | '/export'
   | '/webserver'
@@ -24,7 +23,6 @@ export interface NavItem {
 export const routes: NavItem[] = [
   { path: '/', label: '仪表盘', title: '仪表盘', shortLabel: 'DB', icon: 'dashboard', group: 'primary' },
   { path: '/library', label: '书签库', title: '书签库', shortLabel: 'LB', icon: 'library', group: 'primary' },
-  { path: '/taxonomy', label: '分类与标签', title: '分类与标签', shortLabel: 'TG', icon: 'tags', group: 'primary' },
   { path: '/import', label: '导入中心', title: '导入中心', shortLabel: 'IN', icon: 'import', group: 'workflow' },
   { path: '/export', label: '导出与主题', title: '导出与主题', shortLabel: 'EX', icon: 'export', group: 'workflow' },
   { path: '/webserver', label: '本地 Web', title: '本地 Web 服务', shortLabel: 'WB', icon: 'web', group: 'workflow' },

@@ -108,8 +108,29 @@ export const useBookmarkLibrary = () => {
     await store.deleteCategory(id, deleteBookmarks)
   }
 
+  const clearBookmarksInCategory = async (id: string) => {
+    await store.clearBookmarksInCategory(id)
+    closeEditor()
+  }
+
   const reorderCategory = async (id: string, direction: CategoryReorderDirection) => {
     await store.reorderCategory(id, direction)
+  }
+
+  const setCategoryPinned = async (id: string, pinned: boolean) => {
+    await store.setCategoryPinned(id, pinned)
+  }
+
+  const batchSetCategoryPinned = async (ids: string[], pinned: boolean) => {
+    await store.batchSetCategoryPinned(ids, pinned)
+  }
+
+  const batchDeleteCategories = async (ids: string[], deleteBookmarks = false) => {
+    await store.batchDeleteCategories(ids, deleteBookmarks)
+  }
+
+  const batchReorderCategories = async (ids: string[], direction: CategoryReorderDirection) => {
+    await store.batchReorderCategories(ids, direction)
   }
 
   const saveCustomThumbnail = async (input: ThumbnailUploadInput) => {
@@ -133,6 +154,13 @@ export const useBookmarkLibrary = () => {
   }
 
   const removeSelected = async () => {
+    await store.removeSelected()
+    closeEditor()
+  }
+
+  const removeBookmark = async (item: Bookmark) => {
+    // 表格行删除复用选中态删除逻辑，保证未分类书签和普通分类书签走同一条后端 API。
+    store.select(item)
     await store.removeSelected()
     closeEditor()
   }
@@ -175,7 +203,12 @@ export const useBookmarkLibrary = () => {
     renameCategory,
     moveCategory,
     deleteCategory,
+    clearBookmarksInCategory,
     reorderCategory,
+    setCategoryPinned,
+    batchSetCategoryPinned,
+    batchDeleteCategories,
+    batchReorderCategories,
     saveCustomThumbnail,
     saveCustomThumbnailUrl,
     setThumbnailAutoMode,
@@ -183,6 +216,7 @@ export const useBookmarkLibrary = () => {
     refreshAutoThumbnail,
     save,
     removeSelected,
+    removeBookmark,
     analyzeSelected
   }
 }

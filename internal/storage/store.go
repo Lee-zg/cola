@@ -71,6 +71,7 @@ func (s *Store) init(ctx context.Context) error {
 			parent_id TEXT,
 			sort_order INTEGER NOT NULL DEFAULT 0,
 			is_system INTEGER NOT NULL DEFAULT 0,
+			pinned_at TEXT NOT NULL DEFAULT '',
 			created_at TEXT NOT NULL DEFAULT '',
 			updated_at TEXT NOT NULL DEFAULT ''
 		);`,
@@ -136,6 +137,9 @@ func (s *Store) init(ctx context.Context) error {
 	if err := s.ensureColumn(ctx, "bookmarks", "category_id", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
+	if err := s.ensureColumn(ctx, "categories", "pinned_at", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
 	for _, column := range thumbnailColumns {
 		if err := s.ensureColumn(ctx, "bookmark_previews", column.name, column.definition); err != nil {
 			return err
@@ -189,8 +193,8 @@ func (s *Store) ensureColumn(ctx context.Context, table, column, definition stri
 func (s *Store) ensureSystemCategories(ctx context.Context) error {
 	now := formatTime(time.Now().UTC())
 	_, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO categories
-		(id, name, parent_id, sort_order, is_system, created_at, updated_at)
-		VALUES(?, ?, '', -1, 1, ?, ?)`, bookmark.UncategorizedID, bookmark.UncategorizedName, now, now)
+		(id, name, parent_id, sort_order, is_system, pinned_at, created_at, updated_at)
+		VALUES(?, ?, '', -1, 1, '', ?, ?)`, bookmark.UncategorizedID, bookmark.UncategorizedName, now, now)
 	return err
 }
 
@@ -311,8 +315,13 @@ func (s *Store) CreateBookmark(ctx context.Context, input bookmark.BookmarkInput
 	return s.GetBookmark(ctx, item.ID)
 }
 
-// UpsertBookmarks 用一个事务导入批量书签；单条规范化失败只计为跳过，不中断整批导入。
+// UpsertBookmarks 保留旧导入默认行为：保留分类，并跳过 URL 重复的书签。
 func (s *Store) UpsertBookmarks(ctx context.Context, inputs []bookmark.BookmarkInput) (bookmark.ImportResult, error) {
+	return s.UpsertBookmarksWithOptions(ctx, inputs, bookmark.ImportOptions{SkipDuplicates: true, KeepFolders: true})
+}
+
+// UpsertBookmarksWithOptions 用一个事务导入批量书签；单条规范化失败只计为跳过，不中断整批导入。
+func (s *Store) UpsertBookmarksWithOptions(ctx context.Context, inputs []bookmark.BookmarkInput, options bookmark.ImportOptions) (bookmark.ImportResult, error) {
 	result := bookmark.ImportResult{}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -331,6 +340,11 @@ func (s *Store) UpsertBookmarks(ctx context.Context, inputs []bookmark.BookmarkI
 			result.Errors = append(result.Errors, normErr.Error())
 			continue
 		}
+		if !options.KeepFolders {
+			// 用户关闭“保留原分类”时，所有导入项统一进入未分类，避免创建大量来源目录。
+			normalized.Folder = bookmark.UncategorizedName
+			normalized.CategoryID = bookmark.UncategorizedID
+		}
 		categoryID, folderName, catErr := s.resolveInputCategoryTx(ctx, tx, normalized)
 		if catErr != nil {
 			return result, catErr
@@ -338,20 +352,55 @@ func (s *Store) UpsertBookmarks(ctx context.Context, inputs []bookmark.BookmarkI
 		if _, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO folders(id, name, sort_order) VALUES(?, ?, 0)`, folderID(folderName), folderName); err != nil {
 			return result, err
 		}
-		res, execErr := tx.ExecContext(ctx, `INSERT OR IGNORE INTO bookmarks
-			(id, title, url, description, folder, category_id, tags, keywords, aliases, domain, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			newID("bm"), normalized.Title, normalized.URL, normalized.Description, folderName, categoryID,
-			mustJSON(normalized.Tags), mustJSON(normalized.Keywords), mustJSON(normalized.Aliases),
-			domain, formatTime(now), formatTime(now))
-		if execErr != nil {
-			return result, execErr
+		if options.SkipDuplicates {
+			id := newID("bm")
+			res, execErr := tx.ExecContext(ctx, `INSERT OR IGNORE INTO bookmarks
+				(id, title, url, description, folder, category_id, tags, keywords, aliases, domain, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				id, normalized.Title, normalized.URL, normalized.Description, folderName, categoryID,
+				mustJSON(normalized.Tags), mustJSON(normalized.Keywords), mustJSON(normalized.Aliases),
+				domain, formatTime(now), formatTime(now))
+			if execErr != nil {
+				return result, execErr
+			}
+			affected, _ := res.RowsAffected()
+			if affected == 0 {
+				result.Skipped++
+			} else {
+				result.Imported++
+				result.ChangedIDs = append(result.ChangedIDs, id)
+			}
+			continue
 		}
-		affected, _ := res.RowsAffected()
-		if affected == 0 {
-			result.Skipped++
-		} else {
+
+		var existingID string
+		findErr := tx.QueryRowContext(ctx, `SELECT id FROM bookmarks WHERE url = ?`, normalized.URL).Scan(&existingID)
+		if errors.Is(findErr, sql.ErrNoRows) {
+			id := newID("bm")
+			if _, err = tx.ExecContext(ctx, `INSERT INTO bookmarks
+				(id, title, url, description, folder, category_id, tags, keywords, aliases, domain, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				id, normalized.Title, normalized.URL, normalized.Description, folderName, categoryID,
+				mustJSON(normalized.Tags), mustJSON(normalized.Keywords), mustJSON(normalized.Aliases),
+				domain, formatTime(now), formatTime(now)); err != nil {
+				return result, err
+			}
 			result.Imported++
+			result.ChangedIDs = append(result.ChangedIDs, id)
+		} else if findErr != nil {
+			return result, findErr
+		} else {
+			if _, err = tx.ExecContext(ctx, `UPDATE bookmarks SET
+				title = ?, description = ?, folder = ?, category_id = ?, tags = ?, keywords = ?, aliases = ?,
+				domain = ?, updated_at = ?
+				WHERE id = ?`,
+				normalized.Title, normalized.Description, folderName, categoryID,
+				mustJSON(normalized.Tags), mustJSON(normalized.Keywords), mustJSON(normalized.Aliases),
+				domain, formatTime(now), existingID); err != nil {
+				return result, err
+			}
+			result.Updated++
+			result.ChangedIDs = append(result.ChangedIDs, existingID)
 		}
 	}
 	if err = tx.Commit(); err != nil {
@@ -397,6 +446,41 @@ func (s *Store) DeleteBookmark(ctx context.Context, id string) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func (s *Store) ClearBookmarksInCategory(ctx context.Context, id string) (err error) {
+	id = strings.TrimSpace(id)
+	if id == "" || id == bookmark.RootCategoryID {
+		return errors.New("root category cannot be cleared")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	if _, err = getCategoryWithExec(ctx, tx, id); err != nil {
+		return err
+	}
+	descendants, err := s.descendantCategoryIDsWithExec(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	categoryIDs := append([]string{id}, descendants...)
+	placeholders := make([]string, 0, len(categoryIDs))
+	args := make([]any, 0, len(categoryIDs))
+	for _, categoryID := range categoryIDs {
+		placeholders = append(placeholders, "?")
+		args = append(args, categoryID)
+	}
+	// 清空分类只删除书签内容，分类树节点本身保持不变，系统“未分类”也走这条安全路径。
+	if _, err = tx.ExecContext(ctx, `DELETE FROM bookmarks WHERE category_id IN (`+strings.Join(placeholders, ",")+`)`, args...); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *Store) GetBookmark(ctx context.Context, id string) (bookmark.Bookmark, error) {
@@ -513,12 +597,12 @@ func (s *Store) ListTags(ctx context.Context) ([]string, error) {
 }
 
 func (s *Store) ListCategories(ctx context.Context) ([]bookmark.CategoryNode, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT c.id, c.name, COALESCE(c.parent_id, ''), c.sort_order, c.is_system,
+	rows, err := s.db.QueryContext(ctx, `SELECT c.id, c.name, COALESCE(c.parent_id, ''), c.sort_order, c.is_system, COALESCE(c.pinned_at, ''),
 		c.created_at, c.updated_at, COUNT(b.id)
 		FROM categories c
 		LEFT JOIN bookmarks b ON b.category_id = c.id
-		GROUP BY c.id, c.name, c.parent_id, c.sort_order, c.is_system, c.created_at, c.updated_at
-		ORDER BY c.sort_order ASC, lower(c.name) ASC`)
+		GROUP BY c.id, c.name, c.parent_id, c.sort_order, c.is_system, c.pinned_at, c.created_at, c.updated_at
+		ORDER BY c.is_system DESC, CASE WHEN COALESCE(c.pinned_at, '') != '' THEN 0 ELSE 1 END ASC, c.pinned_at DESC, c.sort_order ASC, lower(c.name) ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -529,11 +613,16 @@ func (s *Store) ListCategories(ctx context.Context) ([]bookmark.CategoryNode, er
 	for rows.Next() {
 		var node bookmark.CategoryNode
 		var isSystem int
-		var createdAt, updatedAt string
-		if err := rows.Scan(&node.ID, &node.Name, &node.ParentID, &node.SortOrder, &isSystem, &createdAt, &updatedAt, &node.Count); err != nil {
+		var pinnedAt, createdAt, updatedAt string
+		if err := rows.Scan(&node.ID, &node.Name, &node.ParentID, &node.SortOrder, &isSystem, &pinnedAt, &createdAt, &updatedAt, &node.Count); err != nil {
 			return nil, err
 		}
 		node.IsSystem = isSystem == 1
+		if pinnedAt != "" {
+			parsedPinnedAt := parseTime(pinnedAt)
+			node.IsPinned = true
+			node.PinnedAt = &parsedPinnedAt
+		}
 		node.CreatedAt = parseTime(createdAt)
 		node.UpdatedAt = parseTime(updatedAt)
 		node.Children = []bookmark.CategoryNode{}
@@ -603,8 +692,8 @@ func (s *Store) CreateCategory(ctx context.Context, input bookmark.CategoryInput
 		UpdatedAt: now,
 		Children:  []bookmark.CategoryNode{},
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO categories(id, name, parent_id, sort_order, is_system, created_at, updated_at)
-		VALUES(?, ?, ?, ?, 0, ?, ?)`, node.ID, node.Name, nullableParent(node.ParentID), node.SortOrder, formatTime(now), formatTime(now))
+	_, err = s.db.ExecContext(ctx, `INSERT INTO categories(id, name, parent_id, sort_order, is_system, pinned_at, created_at, updated_at)
+		VALUES(?, ?, ?, ?, 0, '', ?, ?)`, node.ID, node.Name, nullableParent(node.ParentID), node.SortOrder, formatTime(now), formatTime(now))
 	if err != nil {
 		return bookmark.CategoryNode{}, err
 	}
@@ -705,28 +794,35 @@ func (s *Store) DeleteCategory(ctx context.Context, id string) error {
 	return s.DeleteCategoryWithOptions(ctx, id, bookmark.DeleteCategoryInput{})
 }
 
-func (s *Store) DeleteCategoryWithOptions(ctx context.Context, id string, input bookmark.DeleteCategoryInput) error {
+func (s *Store) SetCategoryPinned(ctx context.Context, id string, input bookmark.CategoryPinnedInput) (bookmark.CategoryNode, error) {
 	node, err := s.getCategory(ctx, id)
 	if err != nil {
-		return err
+		return bookmark.CategoryNode{}, err
 	}
 	if node.IsSystem {
-		return errors.New("system category cannot be deleted")
+		return bookmark.CategoryNode{}, errors.New("system category cannot be pinned")
 	}
-	descendants, err := s.descendantCategoryIDs(ctx, id)
+	now := formatTime(time.Now().UTC())
+	pinnedAt := ""
+	if input.Pinned {
+		pinnedAt = now
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE categories SET pinned_at = ?, updated_at = ? WHERE id = ?`, pinnedAt, now, id); err != nil {
+		return bookmark.CategoryNode{}, err
+	}
+	return s.getCategory(ctx, id)
+}
+
+func (s *Store) BatchSetCategoryPinned(ctx context.Context, input bookmark.BatchCategoryPinnedInput) error {
+	ids := uniqueStrings(input.IDs)
+	if len(ids) == 0 {
+		return nil
+	}
+	nodes, err := s.categoryMap(ctx, ids)
 	if err != nil {
 		return err
 	}
-	deleteIDs := append([]string{id}, descendants...)
-	targetID := normalizeParentID(node.ParentID)
-	if targetID == "" {
-		targetID = bookmark.UncategorizedID
-	}
-	target, err := s.getCategory(ctx, targetID)
-	if err != nil {
-		return err
-	}
-	targetPath, err := s.categoryPathString(ctx, target.ID)
+	orderedIDs, err := s.orderCategoryIDsForBatchPin(ctx, ids, nodes)
 	if err != nil {
 		return err
 	}
@@ -739,19 +835,170 @@ func (s *Store) DeleteCategoryWithOptions(ctx context.Context, id string, input 
 			_ = tx.Rollback()
 		}
 	}()
+	base := time.Now().UTC()
+	for index, id := range orderedIDs {
+		node, ok := nodes[id]
+		if !ok {
+			return sql.ErrNoRows
+		}
+		if node.IsSystem {
+			return errors.New("system category cannot be pinned")
+		}
+		pinnedAt := ""
+		// 批量置顶时按当前显示顺序写入递减时间，保证批量后组内顺序不乱。
+		if input.Pinned {
+			pinnedAt = formatTime(base.Add(-time.Duration(index) * time.Nanosecond))
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE categories SET pinned_at = ?, updated_at = ? WHERE id = ?`, pinnedAt, formatTime(base), id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (s *Store) BatchReorderCategories(ctx context.Context, input bookmark.BatchCategoryReorderInput) error {
+	ids := uniqueStrings(input.IDs)
+	if len(ids) == 0 {
+		return nil
+	}
+	if input.Direction != "up" && input.Direction != "down" {
+		return errors.New("unsupported category reorder direction")
+	}
+	nodes, err := s.categoryMap(ctx, ids)
+	if err != nil {
+		return err
+	}
+	parentID := ""
+	for index, id := range ids {
+		node, ok := nodes[id]
+		if !ok {
+			return sql.ErrNoRows
+		}
+		if node.IsSystem {
+			return errors.New("system category cannot be moved")
+		}
+		if node.IsPinned {
+			return errors.New("pinned category cannot be moved")
+		}
+		currentParentID := normalizeParentID(node.ParentID)
+		if index == 0 {
+			parentID = currentParentID
+		} else if currentParentID != parentID {
+			return errors.New("batch category reorder requires the same parent")
+		}
+	}
+	siblings, err := s.normalCategorySiblings(ctx, parentID)
+	if err != nil {
+		return err
+	}
+	selected := map[string]struct{}{}
+	for _, id := range ids {
+		selected[id] = struct{}{}
+	}
+	ordered := append([]categoryOrderItem{}, siblings...)
+	if input.Direction == "up" {
+		for index := 1; index < len(ordered); index += 1 {
+			if _, ok := selected[ordered[index].id]; !ok {
+				continue
+			}
+			if _, previousSelected := selected[ordered[index-1].id]; previousSelected {
+				continue
+			}
+			ordered[index-1], ordered[index] = ordered[index], ordered[index-1]
+		}
+	} else {
+		for index := len(ordered) - 2; index >= 0; index -= 1 {
+			if _, ok := selected[ordered[index].id]; !ok {
+				continue
+			}
+			if _, nextSelected := selected[ordered[index+1].id]; nextSelected {
+				continue
+			}
+			ordered[index], ordered[index+1] = ordered[index+1], ordered[index]
+		}
+	}
+	return s.rewriteNormalCategoryOrder(ctx, parentID, ordered)
+}
+
+func (s *Store) BatchDeleteCategories(ctx context.Context, input bookmark.BatchCategoryDeleteInput) error {
+	roots, err := s.pruneCategoryDeleteRoots(ctx, input.IDs)
+	if err != nil {
+		return err
+	}
+	if len(roots) == 0 {
+		return nil
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	for _, root := range roots {
+		if err = s.deleteCategoryInTx(ctx, tx, root.ID, input.DeleteBookmarks); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (s *Store) DeleteCategoryWithOptions(ctx context.Context, id string, input bookmark.DeleteCategoryInput) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	if err = s.deleteCategoryInTx(ctx, tx, id, input.DeleteBookmarks); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Store) deleteCategoryInTx(ctx context.Context, tx *sql.Tx, id string, deleteBookmarks bool) error {
+	node, err := getCategoryWithExec(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	if node.IsSystem {
+		return errors.New("system category cannot be deleted")
+	}
+	descendants, err := s.descendantCategoryIDsWithExec(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	deleteIDs := append([]string{id}, descendants...)
+	targetID := normalizeParentID(node.ParentID)
+	if targetID == "" {
+		targetID = bookmark.UncategorizedID
+	}
+	target, err := getCategoryWithExec(ctx, tx, targetID)
+	if err != nil {
+		return err
+	}
+	targetPath, err := categoryPathWithExec(ctx, tx, target.ID)
+	if err != nil {
+		return err
+	}
 	placeholders := make([]string, 0, len(deleteIDs))
 	args := []any{}
 	for _, categoryID := range deleteIDs {
 		placeholders = append(placeholders, "?")
 		args = append(args, categoryID)
 	}
-	if input.DeleteBookmarks {
+	if deleteBookmarks {
 		// 勾选删除书签时先清理书签，缩略图记录由外键级联删除。
 		if _, err = tx.ExecContext(ctx, `DELETE FROM bookmarks WHERE category_id IN (`+strings.Join(placeholders, ",")+`)`, args...); err != nil {
 			return err
 		}
 	} else {
-		updateArgs := append([]any{target.ID, targetPath}, args...)
+		updateArgs := append([]any{target.ID, strings.Join(targetPath, " / ")}, args...)
 		if _, err = tx.ExecContext(ctx, `UPDATE bookmarks SET category_id = ?, folder = ? WHERE category_id IN (`+strings.Join(placeholders, ",")+`)`, updateArgs...); err != nil {
 			return err
 		}
@@ -759,7 +1006,7 @@ func (s *Store) DeleteCategoryWithOptions(ctx context.Context, id string, input 
 	if _, err = tx.ExecContext(ctx, `DELETE FROM categories WHERE id IN (`+strings.Join(placeholders, ",")+`)`, args...); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }
 
 // ApplyAnalysis 合并分析建议而不是覆盖字段，保护用户手工维护的标签、关键词和别名。
@@ -1001,6 +1248,7 @@ func (s *Store) resolveInputCategoryTx(ctx context.Context, tx *sql.Tx, input bo
 type sqlExecutor interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 	QueryRowContext(context.Context, string, ...any) *sql.Row
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }
 
 func (s *Store) resolveInputCategoryWithExec(ctx context.Context, exec sqlExecutor, input bookmark.BookmarkInput) (string, string, error) {
@@ -1051,8 +1299,8 @@ func (s *Store) ensureCategoryPathWithExec(ctx context.Context, exec sqlExecutor
 		err := exec.QueryRowContext(ctx, `SELECT id FROM categories WHERE name = ? AND COALESCE(parent_id, '') = ?`, name, parentID).Scan(&existingID)
 		if errors.Is(err, sql.ErrNoRows) {
 			existingID = newID("cat")
-			if _, err := exec.ExecContext(ctx, `INSERT INTO categories(id, name, parent_id, sort_order, is_system, created_at, updated_at)
-				VALUES(?, ?, ?, 0, 0, ?, ?)`, existingID, name, nullableParent(parentID), now, now); err != nil {
+			if _, err := exec.ExecContext(ctx, `INSERT INTO categories(id, name, parent_id, sort_order, is_system, pinned_at, created_at, updated_at)
+				VALUES(?, ?, ?, 0, 0, '', ?, ?)`, existingID, name, nullableParent(parentID), now, now); err != nil {
 				return "", err
 			}
 		} else if err != nil {
@@ -1065,7 +1313,11 @@ func (s *Store) ensureCategoryPathWithExec(ctx context.Context, exec sqlExecutor
 }
 
 func (s *Store) descendantCategoryIDs(ctx context.Context, id string) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `WITH RECURSIVE tree(id) AS (
+	return s.descendantCategoryIDsWithExec(ctx, s.db, id)
+}
+
+func (s *Store) descendantCategoryIDsWithExec(ctx context.Context, exec sqlExecutor, id string) ([]string, error) {
+	rows, err := exec.QueryContext(ctx, `WITH RECURSIVE tree(id) AS (
 		SELECT id FROM categories WHERE parent_id = ?
 		UNION ALL
 		SELECT c.id FROM categories c JOIN tree t ON c.parent_id = t.id
@@ -1195,19 +1447,219 @@ func rebalanceCategorySortOrderTx(ctx context.Context, tx *sql.Tx, movingID, par
 	return nil
 }
 
+type categoryOrderItem struct {
+	id        string
+	sortOrder int
+}
+
+func uniqueStrings(values []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func (s *Store) categoryMap(ctx context.Context, ids []string) (map[string]bookmark.CategoryNode, error) {
+	nodes := make(map[string]bookmark.CategoryNode, len(ids))
+	for _, id := range ids {
+		node, err := s.getCategory(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		nodes[id] = node
+	}
+	return nodes, nil
+}
+
+func (s *Store) orderCategoryIDsForBatchPin(ctx context.Context, ids []string, nodes map[string]bookmark.CategoryNode) ([]string, error) {
+	selected := map[string]struct{}{}
+	parentSeen := map[string]struct{}{}
+	var parents []string
+	for _, id := range ids {
+		node, ok := nodes[id]
+		if !ok {
+			return nil, sql.ErrNoRows
+		}
+		if node.IsSystem {
+			return nil, errors.New("system category cannot be pinned")
+		}
+		selected[id] = struct{}{}
+		parentID := normalizeParentID(node.ParentID)
+		if _, ok := parentSeen[parentID]; !ok {
+			parentSeen[parentID] = struct{}{}
+			parents = append(parents, parentID)
+		}
+	}
+	ordered := make([]string, 0, len(ids))
+	for _, parentID := range parents {
+		rows, err := s.db.QueryContext(ctx, `SELECT id FROM categories
+			WHERE COALESCE(parent_id, '') = ?
+			ORDER BY is_system DESC, CASE WHEN COALESCE(pinned_at, '') != '' THEN 0 ELSE 1 END ASC, pinned_at DESC, sort_order ASC, lower(name) ASC`, parentID)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				_ = rows.Close()
+				return nil, err
+			}
+			if _, ok := selected[id]; ok {
+				ordered = append(ordered, id)
+			}
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		if err := rows.Close(); err != nil {
+			return nil, err
+		}
+	}
+	return ordered, nil
+}
+
+func (s *Store) normalCategorySiblings(ctx context.Context, parentID string) ([]categoryOrderItem, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, sort_order FROM categories
+		WHERE COALESCE(parent_id, '') = ? AND is_system = 0 AND COALESCE(pinned_at, '') = ''
+		ORDER BY sort_order ASC, lower(name) ASC`, parentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []categoryOrderItem{}
+	for rows.Next() {
+		var item categoryOrderItem
+		if err := rows.Scan(&item.id, &item.sortOrder); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (s *Store) rewriteNormalCategoryOrder(ctx context.Context, parentID string, ordered []categoryOrderItem) error {
+	slots, err := s.availableNormalCategorySortSlots(ctx, parentID, len(ordered))
+	if err != nil {
+		return err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	now := formatTime(time.Now().UTC())
+	for index, item := range ordered {
+		if _, err = tx.ExecContext(ctx, `UPDATE categories SET sort_order = ?, updated_at = ? WHERE id = ? AND COALESCE(parent_id, '') = ? AND COALESCE(pinned_at, '') = ''`, slots[index], now, item.id, parentID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (s *Store) availableNormalCategorySortSlots(ctx context.Context, parentID string, needed int) ([]int, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT sort_order FROM categories
+		WHERE COALESCE(parent_id, '') = ? AND is_system = 0 AND COALESCE(pinned_at, '') != ''
+		ORDER BY sort_order ASC`, parentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	pinnedSlots := map[int]struct{}{}
+	for rows.Next() {
+		var sortOrder int
+		if err := rows.Scan(&sortOrder); err != nil {
+			return nil, err
+		}
+		if sortOrder >= 0 {
+			pinnedSlots[sortOrder] = struct{}{}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	slots := make([]int, 0, needed)
+	for sortOrder := 0; len(slots) < needed; sortOrder += 1 {
+		if _, pinned := pinnedSlots[sortOrder]; pinned {
+			continue
+		}
+		slots = append(slots, sortOrder)
+	}
+	return slots, nil
+}
+
+func (s *Store) pruneCategoryDeleteRoots(ctx context.Context, ids []string) ([]bookmark.CategoryNode, error) {
+	uniqueIDs := uniqueStrings(ids)
+	if len(uniqueIDs) == 0 {
+		return nil, nil
+	}
+	nodes, err := s.categoryMap(ctx, uniqueIDs)
+	if err != nil {
+		return nil, err
+	}
+	selected := map[string]struct{}{}
+	for _, id := range uniqueIDs {
+		node := nodes[id]
+		if node.IsSystem {
+			return nil, errors.New("system category cannot be deleted")
+		}
+		selected[id] = struct{}{}
+	}
+	roots := make([]bookmark.CategoryNode, 0, len(uniqueIDs))
+	for _, id := range uniqueIDs {
+		node := nodes[id]
+		hasSelectedAncestor := false
+		parentID := normalizeParentID(node.ParentID)
+		for parentID != "" {
+			if _, ok := selected[parentID]; ok {
+				hasSelectedAncestor = true
+				break
+			}
+			parent, err := s.getCategory(ctx, parentID)
+			if err != nil {
+				return nil, err
+			}
+			parentID = normalizeParentID(parent.ParentID)
+		}
+		if !hasSelectedAncestor {
+			roots = append(roots, node)
+		}
+	}
+	return roots, nil
+}
+
 func getCategoryWithExec(ctx context.Context, exec sqlExecutor, id string) (bookmark.CategoryNode, error) {
 	if id == bookmark.RootCategoryID {
 		return bookmark.CategoryNode{ID: bookmark.RootCategoryID, Name: "全部分类", IsSystem: true}, nil
 	}
 	var node bookmark.CategoryNode
 	var isSystem int
-	var createdAt, updatedAt string
-	err := exec.QueryRowContext(ctx, `SELECT id, name, COALESCE(parent_id, ''), sort_order, is_system, created_at, updated_at
-		FROM categories WHERE id = ?`, id).Scan(&node.ID, &node.Name, &node.ParentID, &node.SortOrder, &isSystem, &createdAt, &updatedAt)
+	var pinnedAt, createdAt, updatedAt string
+	err := exec.QueryRowContext(ctx, `SELECT id, name, COALESCE(parent_id, ''), sort_order, is_system, COALESCE(pinned_at, ''), created_at, updated_at
+		FROM categories WHERE id = ?`, id).Scan(&node.ID, &node.Name, &node.ParentID, &node.SortOrder, &isSystem, &pinnedAt, &createdAt, &updatedAt)
 	if err != nil {
 		return bookmark.CategoryNode{}, err
 	}
 	node.IsSystem = isSystem == 1
+	if pinnedAt != "" {
+		parsedPinnedAt := parseTime(pinnedAt)
+		node.IsPinned = true
+		node.PinnedAt = &parsedPinnedAt
+	}
 	node.CreatedAt = parseTime(createdAt)
 	node.UpdatedAt = parseTime(updatedAt)
 	node.Children = []bookmark.CategoryNode{}

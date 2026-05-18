@@ -319,7 +319,7 @@ watch([() => props.selected?.id, customThumbnailPath], syncThumbnailFileList, { 
             </NButton>
             <NPopconfirm :disabled="!props.selected" positive-text="删除" negative-text="取消" @positive-click="emit('remove')">
               <template #trigger>
-                <NButton :disabled="!props.selected" type="error" secondary>
+                <NButton :disabled="!props.selected" type="error" secondary aria-label="删除当前书签">
                   <template #icon>
                     <NIcon :component="appIcons.trash" />
                   </template>
